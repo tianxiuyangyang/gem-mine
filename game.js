@@ -619,7 +619,7 @@
     } else {
       const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake' || item === 'umbrella');
       const nearMine = isNearGemMine();
-      const mineHint = nearMine && !state.gemMine.repaired ? (state.gems >= 20 ? '按 <kbd>R</kbd> 修复宝石矿井（20 宝石）' : '需要 20 个宝石才能修复矿井') : '';
+      const mineHint = nearMine && !state.gemMine.repaired ? (state.gems >= 20 ? '点击宝石矿井修复（20 宝石）' : '需要 20 个宝石才能修复矿井') : '';
       ui.hint.innerHTML = nearest ? '按 <kbd>E</kbd> 操控炮台' : mineHint || (state.cannonInventory ? '按 <kbd>Q</kbd> 放置大炮' : hasQuickItem ? '按物品栏数字键使用物品' : '');
       ui.hint.classList.toggle('visible', Boolean(nearest || mineHint || state.cannonInventory || hasQuickItem));
     }
@@ -716,7 +716,6 @@
 
   function repairGemMine() {
     if (state.gemMine.repaired) return;
-    if (!isNearGemMine()) return;
     if (state.gems < 20) { showToast('需要 20 个宝石才能修复宝石矿井'); return; }
     state.gems -= 20;
     state.gemMine.repaired = true;
@@ -1429,7 +1428,7 @@
   }
 
   window.addEventListener('keydown', event => {
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyR', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
     keys.add(event.code);
     if (!started || gameOver) return;
     if (event.code === 'Escape' && !event.repeat) {
@@ -1442,7 +1441,6 @@
     if (event.code === 'KeyQ' && !state.player.cannon && state.cannonInventory) {
       placeFirstCannon();
     }
-    if (event.code === 'KeyR' && !event.repeat) repairGemMine();
     if (event.code === 'KeyP' && !event.repeat) {
       state.gems += 100;
       showToast('测试：获得 100 个宝石');
@@ -1454,7 +1452,14 @@
   canvas.addEventListener('mousedown', event => {
     if (event.button !== 0) return;
     mouse.down = true;
-    if (started && !paused && !gameOver && state.player.cannon) fireShell(state.player.cannon);
+    if (started && !paused && !gameOver) {
+      const target = screenToWorld(mouse.x, mouse.y);
+      if (!state.player.cannon && !state.gemMine.repaired && distance(target, state.gemMine) < 120) {
+        repairGemMine();
+        return;
+      }
+      if (state.player.cannon) fireShell(state.player.cannon);
+    }
   });
   window.addEventListener('mouseup', () => { mouse.down = false; });
   canvas.addEventListener('contextmenu', event => event.preventDefault());
