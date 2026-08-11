@@ -595,8 +595,33 @@
   function positionShop() {
     const panelW = ui.shop.offsetWidth || 255;
     const panelH = ui.shop.offsetHeight || 110;
-    ui.shop.style.left = `${shopZone.x + shopZone.w / 2 - panelW / 2 - world.cameraX}px`;
-    ui.shop.style.top = `${shopZone.y - panelH - 28 - world.cameraY}px`;
+    const cameraX = world.cameraX;
+    const cameraY = world.cameraY;
+    const candidates = [
+      { left: shopZone.x + shopZone.w / 2 - panelW / 2 - cameraX, top: shopZone.y - panelH - 28 - cameraY },
+      { left: shopZone.x + shopZone.w + 24 - cameraX, top: shopZone.y + shopZone.h / 2 - panelH / 2 - cameraY },
+      { left: shopZone.x - panelW - 24 - cameraX, top: shopZone.y + shopZone.h / 2 - panelH / 2 - cameraY },
+      { left: shopZone.x + shopZone.w / 2 - panelW / 2 - cameraX, top: shopZone.y + shopZone.h + 24 - cameraY },
+    ];
+    const playerRadius = state.player.radius + 28;
+    const playerScreen = { x: state.player.x - cameraX, y: state.player.y - cameraY };
+    const overlapsPlayer = position => (
+      playerScreen.x + playerRadius > position.left &&
+      playerScreen.x - playerRadius < position.left + panelW &&
+      playerScreen.y + playerRadius > position.top &&
+      playerScreen.y - playerRadius < position.top + panelH
+    );
+    const fitsViewport = position => (
+      position.left + panelW > 8 && position.left < innerWidth - 8 &&
+      position.top + panelH > 8 && position.top < innerHeight - 8
+    );
+    const selected = candidates.find(position => fitsViewport(position) && !overlapsPlayer(position))
+      || candidates.find(fitsViewport)
+      || candidates[0];
+    const maxLeft = Math.max(8, innerWidth - panelW - 8);
+    const maxTop = Math.max(8, innerHeight - panelH - 8);
+    ui.shop.style.left = `${clamp(selected.left, 8, maxLeft)}px`;
+    ui.shop.style.top = `${clamp(selected.top, 8, maxTop)}px`;
   }
 
   function findNearestCannon() {
