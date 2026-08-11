@@ -58,6 +58,7 @@
     debris: [],
     shells: [],
     bullets: [],
+    sniperTrails: [],
     gemsOnGround: [],
     particles: [],
     trains: [],
@@ -107,6 +108,7 @@
     state.debris = [];
     state.shells = [];
     state.bullets = [];
+    state.sniperTrails = [];
     state.gemsOnGround = [];
     state.particles = [];
     state.trains = [];
@@ -167,14 +169,27 @@
     toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 1500);
   }
 
+  function randomMonsterWeapon() {
+    if (state.time < 45) return 'shotgun';
+    if (state.time < 90) return Math.random() < .5 ? 'splitter' : 'shotgun';
+    const roll = Math.random();
+    if (roll < 1 / 3) return 'shotgun';
+    if (roll < 2 / 3) return 'splitter';
+    return 'sniper';
+  }
+
+  function createMonster() {
+    return { cooldown: 1.8, flash: 0, angle: Math.PI, weapon: randomMonsterWeapon() };
+  }
+
   function spawnTrain() {
     const hasGemCar = Math.random() > .18;
     state.trainRound++;
-    const splitWeapon = state.time >= 45 && Math.random() < .5;
-    const train = { x: -300, y: rail.center, round: state.trainRound, speed: TRAIN_BASE_SPEED, destroyed: false, cars: [], monster: { cooldown: 1.8, flash: 0, angle: Math.PI, weapon: splitWeapon ? 'splitter' : 'shotgun' } };
-    train.cars.push({ offset: 0, type: 'engine', hp: 2, radius: 40, destroyed: false });
-    train.cars.push({ offset: -96, type: hasGemCar ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
-    train.cars.push({ offset: -180, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
+    const train = { x: -300, y: rail.center, round: state.trainRound, speed: TRAIN_BASE_SPEED, destroyed: false, cars: [] };
+    train.cars.push({ offset: 0, type: 'engine', hp: 2, radius: 40, destroyed: false, monster: createMonster() });
+    train.cars.push({ offset: -96, type: 'engine', hp: 2, radius: 40, destroyed: false, monster: createMonster() });
+    train.cars.push({ offset: -192, type: hasGemCar ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
+    train.cars.push({ offset: -276, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
     state.trains.push(train);
     showToast('火车驶入矿井！');
   }
@@ -190,15 +205,21 @@
     emit(cannon.x + Math.cos(cannon.angle) * 42, cannon.y + Math.sin(cannon.angle) * 42, '#ffd76d', 13, 165);
   }
 
-  function fireMonster(train) {
-    const monster = train.monster;
-    const engine = { x: train.x, y: train.y - 17 };
+  function fireMonster(train, engineCar) {
+    const monster = engineCar.monster;
+    const engine = { x: train.x + engineCar.offset, y: train.y - 17 };
     const dx = state.player.x - engine.x;
     const dy = state.player.y - engine.y;
     const base = monster.angle;
     if (monster.weapon === 'splitter') {
       state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * SPLITTER_LARGE_SPEED, vy: Math.sin(base) * SPLITTER_LARGE_SPEED, radius: 16, type: 'splitter' });
       monster.cooldown = 1.8;
+      monster.flash = .16;
+      return;
+    }
+    if (monster.weapon === 'sniper') {
+      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 360, vy: Math.sin(base) * 360, radius: 8, type: 'sniper' });
+      monster.cooldown = 2.05;
       monster.flash = .16;
       return;
     }
@@ -393,10 +414,15 @@
       if (!train.destroyed) {
         train.speed = TRAIN_BASE_SPEED * trainSpeedMultiplier();
         train.x += train.speed * dt;
-        train.monster.angle = Math.atan2(state.player.y - (train.y - 17), state.player.x - train.x);
-        train.monster.cooldown -= dt;
-        train.monster.flash = Math.max(0, train.monster.flash - dt);
-        if (train.monster.cooldown <= 0 && train.x > 0 && train.x < world.w + 80) fireMonster(train);
+        for (const car of train.cars) {
+          if (car.type !== 'engine' || car.destroyed) continue;
+          const monster = car.monster;
+          const engineX = train.x + car.offset;
+          monster.angle = Math.atan2(state.player.y - (train.y - 17), state.player.x - engineX);
+          monster.cooldown -= dt;
+          monster.flash = Math.max(0, monster.flash - dt);
+          if (monster.cooldown <= 0 && engineX > 0 && engineX < world.w + 80) fireMonster(train, car);
+        }
       }
     }
     state.trains = state.trains.filter(train => train.x < world.w + 340 && (!train.destroyed || train.x < world.w + 150));
@@ -428,9 +454,14 @@
 
   function updateBullets(dt) {
     const p = state.player;
+    state.sniperTrails.forEach(segment => { segment.age += dt; });
+    state.sniperTrails = state.sniperTrails.filter(segment => segment.age < 1);
     for (const bullet of state.bullets) {
+      const previousX = bullet.x;
+      const previousY = bullet.y;
       bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
+      if (bullet.type === 'sniper') state.sniperTrails.push({ x1: previousX, y1: previousY, x2: bullet.x, y2: bullet.y, age: 0 });
       const outsideMap = bullet.x < 0 || bullet.y < 0 || bullet.x > world.w || bullet.y > world.h;
       if (bullet.type === 'splitter' && outsideMap) {
         bullet.x = clamp(bullet.x, 0, world.w);
@@ -655,6 +686,7 @@
     for (const cannon of state.cannons) drawCannon(cannon);
     for (const train of state.trains) drawTrain(train);
     for (const shell of state.shells) drawShell(shell);
+    for (const trail of state.sniperTrails) drawSniperTrail(trail);
     for (const bullet of state.bullets) drawBullet(bullet);
     for (const rock of state.fallingRocks) drawFallingRock(rock);
     drawPlayer(state.player);
@@ -887,7 +919,7 @@
       if (car.destroyed) continue;
       const x = train.x + car.offset;
       const y = train.y;
-      if (car.type === 'engine') drawEngine(x, y, train.monster);
+      if (car.type === 'engine') drawEngine(x, y, car.monster);
       else drawCar(x, y, car.type);
     }
   }
@@ -945,10 +977,11 @@
     ctx.save();
     ctx.translate(9, 8);
     ctx.rotate(monster.angle || 0);
-    ctx.fillStyle = monster.weapon === 'splitter' ? '#704d91' : '#33444a';
+    ctx.fillStyle = monster.weapon === 'splitter' ? '#704d91' : monster.weapon === 'sniper' ? '#60758d' : '#33444a';
     ctx.fillRect(0, 0, 24, 7);
     ctx.fillRect(18, -3, 13, 5);
     if (monster.weapon === 'splitter') ctx.fillRect(18, 6, 13, 5);
+    if (monster.weapon === 'sniper') ctx.fillRect(18, -1, 25, 3);
     if (monster.flash) { ctx.fillStyle = '#fff1a1'; ctx.beginPath(); ctx.arc(34, 2, 8, 0, TAU); ctx.fill(); }
     ctx.restore();
     ctx.restore();
@@ -1025,7 +1058,26 @@
   }
 
   function drawShell(s) { ctx.fillStyle = '#fff1a5'; ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, TAU); ctx.fill(); ctx.strokeStyle = '#df774d'; ctx.lineWidth = 2; ctx.stroke(); }
+  function drawSniperTrail(trail) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - trail.age) * .48;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4 * Math.max(.25, 1 - trail.age);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(trail.x1, trail.y1); ctx.lineTo(trail.x2, trail.y2); ctx.stroke();
+    ctx.restore();
+  }
   function drawBullet(b) {
+    if (b.type === 'sniper') {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(Math.atan2(b.vy, b.vx));
+      ctx.fillStyle = '#e7f5ff';
+      ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-9, -7); ctx.lineTo(-4, 0); ctx.lineTo(-9, 7); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#7fa5bc'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+      return;
+    }
     if (b.type === 'splitter') {
       ctx.fillStyle = 'rgba(182, 140, 255, .24)';
       ctx.beginPath(); ctx.arc(b.x, b.y, b.radius * 1.65, 0, TAU); ctx.fill();
