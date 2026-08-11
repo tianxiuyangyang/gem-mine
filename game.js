@@ -1409,7 +1409,8 @@
   });
   window.addEventListener('mouseup', () => { mouse.down = false; });
   canvas.addEventListener('contextmenu', event => event.preventDefault());
-  ui.inventorySlots.forEach((slot, index) => slot.addEventListener('click', () => {
+  ui.inventorySlots.forEach((slot, index) => slot.addEventListener('click', event => {
+    event.preventDefault();
     if (started && !paused && !gameOver) useInventorySlot(index);
   }));
   ui.buy.addEventListener('click', buyCannon);
