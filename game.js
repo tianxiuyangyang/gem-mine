@@ -717,6 +717,7 @@
 
   function repairGemMine() {
     if (state.gemMine.repaired) return;
+    if (!isNearGemMine()) { showToast('请靠近宝石矿井后再修复'); return; }
     if (state.gems < 20) { showToast('需要 20 个宝石才能修复宝石矿井'); return; }
     state.gems -= 20;
     state.gemMine.repaired = true;
