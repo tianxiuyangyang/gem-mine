@@ -1429,7 +1429,7 @@
   }
 
   window.addEventListener('keydown', event => {
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyR', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyR', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
     keys.add(event.code);
     if (!started || gameOver) return;
     if (event.code === 'Escape' && !event.repeat) {
@@ -1443,6 +1443,10 @@
       placeFirstCannon();
     }
     if (event.code === 'KeyR' && !event.repeat) repairGemMine();
+    if (event.code === 'KeyP' && !event.repeat) {
+      state.gems += 100;
+      showToast('测试：获得 100 个宝石');
+    }
     if (event.code.startsWith('Digit')) useInventorySlot(Number(event.code.slice(-1)) - 1);
   });
   window.addEventListener('keyup', event => keys.delete(event.code));
