@@ -48,6 +48,7 @@
   let paused = false;
   let gameOver = false;
   let toastTimer = 0;
+  let testGemPresses = [];
 
   const state = {
     gems: 0,
@@ -1442,8 +1443,14 @@
       placeFirstCannon();
     }
     if (event.code === 'KeyP' && !event.repeat) {
-      state.gems += 100;
-      showToast('测试：获得 100 个宝石');
+      const now = performance.now();
+      testGemPresses = testGemPresses.filter(timestamp => now - timestamp <= 3000);
+      testGemPresses.push(now);
+      if (testGemPresses.length >= 5) {
+        state.gems += 100;
+        testGemPresses = [];
+        showToast('测试：获得 100 个宝石');
+      }
     }
     if (event.code.startsWith('Digit')) useInventorySlot(Number(event.code.slice(-1)) - 1);
   });
