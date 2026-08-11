@@ -81,6 +81,7 @@ canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 .slot-fish { position: relative; width: 44px; height: 30px; border: 3px solid #24414b; border-radius: 50% 46% 46% 50%; background: #78bdc5; }
 .slot-fish::before { content: ""; position: absolute; right: -16px; top: 4px; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 16px solid #78bdc5; }
 .slot-fish::after { content: ""; position: absolute; left: 8px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: #24414b; }
+.inventory-slot > span:not(.slot-number) { pointer-events: none; }
 .slot-wall { width: 48px; height: 38px; border: 3px solid #263943; border-radius: 2px; background: repeating-linear-gradient(0deg, #9eafb0 0 10px, #6d8184 11px 14px); box-shadow: inset 12px 0 rgba(255,255,255,.18); }
 .slot-cake { position: relative; width: 40px; height: 30px; border: 3px solid #47333a; border-radius: 4px 4px 7px 7px; background: #ef8794; box-shadow: inset 0 -10px #bf5d72; }
 .slot-cake::before { content: ""; position: absolute; left: -3px; top: -13px; width: 40px; height: 12px; border: 3px solid #47333a; border-radius: 8px 8px 3px 3px; background: #fff0c8; }
