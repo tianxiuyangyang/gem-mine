@@ -885,20 +885,66 @@
     const mine = state.gemMine;
     ctx.save();
     ctx.translate(mine.x, mine.y);
-    ctx.fillStyle = '#15242d';
-    ctx.fillRect(-72, -42, 146, 92);
-    ctx.fillStyle = mine.repaired ? '#357b78' : '#4e4d58';
-    ctx.fillRect(-62, -31, 126, 80);
-    ctx.fillStyle = '#0c151d';
-    ctx.beginPath(); ctx.ellipse(2, 20, 43, 31, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = mine.repaired ? '#69f5df' : '#747c84';
-    ctx.lineWidth = 5; ctx.stroke();
-    ctx.fillStyle = '#f5e4a8'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(mine.repaired ? '宝石矿井' : '待修复矿井', 0, -50);
+    const glow = mine.repaired ? .62 + Math.sin(state.time * 4) * .18 : 0;
+
+    ctx.fillStyle = 'rgba(8, 16, 23, .38)';
+    ctx.beginPath(); ctx.ellipse(0, 55, 105, 19, 0, 0, TAU); ctx.fill();
+
+    // Rocky cliff face framing the mine entrance.
+    ctx.fillStyle = mine.repaired ? '#405d62' : '#535661';
+    ctx.beginPath();
+    ctx.moveTo(-100, 48); ctx.lineTo(-88, -17); ctx.lineTo(-65, -62); ctx.lineTo(-25, -75);
+    ctx.lineTo(18, -70); ctx.lineTo(67, -51); ctx.lineTo(96, -7); ctx.lineTo(102, 48);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#1b2b34'; ctx.lineWidth = 5; ctx.stroke();
+
+    ctx.fillStyle = mine.repaired ? '#223b43' : '#252d37';
+    ctx.beginPath(); ctx.ellipse(1, 24, 62, 48, 0, Math.PI, 0); ctx.lineTo(63, 48); ctx.lineTo(-61, 48); ctx.closePath(); ctx.fill();
+
     if (mine.repaired) {
-      ctx.fillStyle = '#69f5df'; ctx.beginPath(); ctx.arc(48, -16, 8, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#d7ffff'; ctx.font = 'bold 11px sans-serif'; ctx.fillText('3s', 48, -12);
+      ctx.save();
+      ctx.globalAlpha = glow;
+      ctx.fillStyle = '#57e6d3';
+      ctx.beginPath(); ctx.ellipse(1, 22, 46, 34, 0, Math.PI, 0); ctx.lineTo(47, 47); ctx.lineTo(-45, 47); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = '#78533a'; ctx.lineWidth = 9;
+      for (const x of [-54, 54]) { ctx.beginPath(); ctx.moveTo(x, 48); ctx.lineTo(x * .83, -36); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(-58, -37); ctx.lineTo(58, -37); ctx.stroke();
+      ctx.strokeStyle = '#b7885e'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-57, -42); ctx.lineTo(57, -42); ctx.stroke();
+
+      ctx.strokeStyle = '#687d80'; ctx.lineWidth = 4;
+      for (const y of [38, 51]) { ctx.beginPath(); ctx.moveTo(-84, y); ctx.lineTo(80, y); ctx.stroke(); }
+      ctx.strokeStyle = '#8b6749'; ctx.lineWidth = 5;
+      for (let x = -72; x <= 67; x += 24) { ctx.beginPath(); ctx.moveTo(x, 32); ctx.lineTo(x + 5, 57); ctx.stroke(); }
+
+      ctx.fillStyle = '#f8d56d'; ctx.beginPath(); ctx.arc(-67, -29, 9, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#2b363b'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.fillStyle = 'rgba(249, 221, 115, .17)'; ctx.beginPath(); ctx.moveTo(-67, -20); ctx.lineTo(-105, 26); ctx.lineTo(-28, 26); ctx.closePath(); ctx.fill();
+      for (const [x, y, size] of [[-17, 6, 10], [12, 22, 12], [30, 1, 8]]) drawGem(x, y, size / 13, '#7ff5e1', .92);
+    } else {
+      ctx.fillStyle = '#777a7e';
+      for (const [x, y, r] of [[-48, 30, 26], [-13, 17, 31], [23, 28, 29], [52, 35, 20]]) {
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      }
+      ctx.strokeStyle = '#252d35'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(-73, -20); ctx.lineTo(-44, -2); ctx.lineTo(-61, 17); ctx.lineTo(-31, 39); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(57, -18); ctx.lineTo(36, 5); ctx.lineTo(54, 19); ctx.stroke();
+
+      ctx.save(); ctx.translate(73, 3); ctx.rotate(-.14);
+      ctx.fillStyle = '#c26f47'; ctx.fillRect(-22, -17, 44, 30);
+      ctx.strokeStyle = '#492f2b'; ctx.lineWidth = 4; ctx.strokeRect(-22, -17, 44, 30);
+      ctx.fillStyle = '#ffe0a0'; ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', 0, 6);
+      ctx.restore();
     }
+
+    ctx.fillStyle = mine.repaired ? '#efffd9' : '#e5c995';
+    ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(mine.repaired ? '宝石矿井' : '坍塌矿井', 0, -91);
+    ctx.font = '900 10px sans-serif';
+    ctx.fillStyle = mine.repaired ? '#70eddb' : '#e49b72';
+    ctx.fillText(mine.repaired ? '每 3 秒产出宝石' : 'R  修复 · 20 宝石', 0, -76);
     ctx.restore();
   }
 
