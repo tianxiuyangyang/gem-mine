@@ -74,6 +74,10 @@
 
   const MAP_SCALE = 1.5;
   const TRAIN_BASE_SPEED = 58;
+  const MONSTER_AMMO_SPEED_FACTOR = 2 / 3;
+  const SHOTGUN_BULLET_SPEED = 93 * MONSTER_AMMO_SPEED_FACTOR;
+  const SPLIT_SHARD_SPEED = 126 * MONSTER_AMMO_SPEED_FACTOR;
+  const SPLITTER_LARGE_SPEED = 105 * 1.5;
   const world = { w: 1800 * MAP_SCALE, h: 1100 * MAP_SCALE, cameraX: 0, cameraY: 0 };
   const rail = { bandTop: 350 * MAP_SCALE, bandHeight: 112 * MAP_SCALE, upper: 370 * MAP_SCALE, lower: 440 * MAP_SCALE, center: 405 * MAP_SCALE };
   const shopZone = { x: 1510 * MAP_SCALE, y: 860 * MAP_SCALE, w: 220 * MAP_SCALE, h: 155 * MAP_SCALE };
@@ -193,7 +197,7 @@
     const dy = state.player.y - engine.y;
     const base = monster.angle;
     if (monster.weapon === 'splitter') {
-      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 105, vy: Math.sin(base) * 105, radius: 16, type: 'splitter' });
+      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * SPLITTER_LARGE_SPEED, vy: Math.sin(base) * SPLITTER_LARGE_SPEED, radius: 16, type: 'splitter' });
       monster.cooldown = 1.8;
       monster.flash = .16;
       return;
@@ -202,7 +206,7 @@
     const spreadHalf = Math.floor(spreadCount / 2);
     for (let i = -spreadHalf; i <= spreadHalf; i++) {
       const angle = base + i * .16;
-      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(angle) * 93, vy: Math.sin(angle) * 93, radius: 7, hitPlayer: false });
+      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(angle) * SHOTGUN_BULLET_SPEED, vy: Math.sin(angle) * SHOTGUN_BULLET_SPEED, radius: 7, hitPlayer: false });
     }
     monster.cooldown = 1.65;
     monster.flash = .16;
@@ -213,10 +217,10 @@
     bullet.spent = true;
     emit(bullet.x, bullet.y, '#b68cff', 16, 155);
     const baseAngle = Math.atan2(bullet.vy, bullet.vx);
-    const shardCount = 6;
+    const shardCount = 12;
     for (let i = 0; i < shardCount; i++) {
       const angle = baseAngle + i / shardCount * TAU + Math.PI / shardCount;
-      state.bullets.push({ x: bullet.x, y: bullet.y, vx: Math.cos(angle) * 126, vy: Math.sin(angle) * 126, radius: 7, type: 'splitShard', hitPlayer: false });
+      state.bullets.push({ x: bullet.x, y: bullet.y, vx: Math.cos(angle) * SPLIT_SHARD_SPEED, vy: Math.sin(angle) * SPLIT_SHARD_SPEED, radius: 7, type: 'splitShard', hitPlayer: false });
     }
   }
 
