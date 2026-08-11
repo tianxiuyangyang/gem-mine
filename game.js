@@ -194,9 +194,8 @@
     state.trainRound++;
     const train = { x: -300, y: rail.center, round: state.trainRound, speed: TRAIN_BASE_SPEED, destroyed: false, cars: [] };
     train.cars.push({ offset: 0, type: 'engine', hp: 2, radius: 40, destroyed: false, monster: createMonster() });
-    train.cars.push({ offset: -96, type: 'engine', hp: 2, radius: 40, destroyed: false, monster: createMonster() });
-    train.cars.push({ offset: -192, type: hasGemCar ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
-    train.cars.push({ offset: -276, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
+    train.cars.push({ offset: -96, type: hasGemCar ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
+    train.cars.push({ offset: -180, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
     state.trains.push(train);
     showToast('火车驶入矿井！');
   }
