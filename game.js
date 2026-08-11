@@ -723,7 +723,6 @@
     state.gemMine.productionTimer = 3;
     emit(state.gemMine.x, state.gemMine.y, '#69f5df', 22, 130);
     showToast('宝石矿井修复完成，每 3 秒产出一颗宝石');
-    syncUI();
   }
 
   function draw() {
