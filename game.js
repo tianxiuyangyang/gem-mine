@@ -15,6 +15,7 @@
     buyFish: document.querySelector('#buy-fish'),
     buyWall: document.querySelector('#buy-wall'),
     buyCake: document.querySelector('#buy-cake'),
+    buyUmbrella: document.querySelector('#buy-umbrella'),
     buffHud: document.querySelector('#buff-hud'),
     buffText: document.querySelector('#buff-text'),
     toast: document.querySelector('#toast'),
@@ -55,6 +56,7 @@
     player: { x: 0, y: 0, radius: 16, speed: 235, facing: 0, skin: 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, speedBuff: 0, cannon: null },
     cannons: [],
     walls: [],
+    umbrellas: [],
     debris: [],
     shells: [],
     bullets: [],
@@ -105,6 +107,7 @@
     state.inventory = Array(6).fill(null);
     state.cannons = [];
     state.walls = [];
+    state.umbrellas = [];
     state.debris = [];
     state.shells = [];
     state.bullets = [];
@@ -134,6 +137,10 @@
 
   function placeWall(x, y) {
     state.walls.push({ x, y, radius: 31, hits: 0 });
+  }
+
+  function placeUmbrella(x, y) {
+    state.umbrellas.push({ x, y, radius: 126, hits: 0, destroyed: false });
   }
 
   function updateCamera() {
@@ -376,6 +383,21 @@
   function impactRock(rock) {
     rock.impacted = true;
     const impact = { x: rock.x, y: rock.targetY, radius: rock.radius };
+    const umbrella = state.umbrellas.find(candidate => !candidate.destroyed && circleHit(impact, candidate, 1));
+    if (umbrella) {
+      umbrella.hits++;
+      emit(impact.x, impact.y, '#f7d982', 18, 140);
+      state.screenShake = state.reducedMotion ? 0 : 4;
+      if (umbrella.hits >= 3) {
+        umbrella.destroyed = true;
+        state.debris.push({ x: umbrella.x, y: umbrella.y, rotation: Math.random() * TAU, kind: 'umbrella' });
+        showToast('保护伞被落石击碎了');
+      } else {
+        showToast(`保护伞拦截落石（${3 - umbrella.hits} 次耐久）`);
+      }
+      state.umbrellas = state.umbrellas.filter(candidate => !candidate.destroyed);
+      return;
+    }
     state.debris.push({ x: impact.x, y: impact.y, rotation: Math.random() * TAU, kind: 'rock', radius: rock.radius });
     emit(impact.x, impact.y, '#8b9ba1', 16, 170);
     state.screenShake = state.reducedMotion ? 0 : 9;
@@ -402,6 +424,7 @@
       wall.hits = 2;
       damageWall(wall);
     }
+    state.umbrellas = state.umbrellas.filter(umbrella => !umbrella.destroyed);
   }
 
   function updateTrains(dt) {
@@ -582,7 +605,7 @@
       ui.hint.textContent = '鼠标瞄准 · 左键发射 · E 离开炮台';
       ui.hint.classList.add('visible');
     } else {
-      const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake');
+      const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake' || item === 'umbrella');
       ui.hint.innerHTML = nearest ? '按 <kbd>E</kbd> 操控炮台' : state.cannonInventory ? '按 <kbd>Q</kbd> 放置大炮' : hasQuickItem ? '按物品栏数字键使用物品' : '';
       ui.hint.classList.toggle('visible', Boolean(nearest || state.cannonInventory || hasQuickItem));
     }
@@ -597,6 +620,8 @@
     ui.buyFish.title = nearShop ? '购买鱼罐头' : '靠近矿井补给站后购买';
     ui.buyWall.disabled = state.gems < 10 || !nearShop || state.inventory.every(item => item);
     ui.buyCake.disabled = state.gems < 9 || !nearShop || state.inventory.every(item => item);
+    ui.buyUmbrella.disabled = state.gems < 14 || !nearShop || state.inventory.every(item => item);
+    ui.buyUmbrella.title = nearShop ? '购买保护伞' : '靠近矿井补给站后购买';
     ui.buyCake.title = nearShop ? '购买蛋糕' : '靠近矿井补给站后购买';
     ui.buyWall.title = nearShop ? '购买防护墙体' : '靠近矿井补给站后购买';
   }
@@ -616,14 +641,17 @@
       if (oldWall) oldWall.remove();
       const oldCake = slot.querySelector('.slot-cake');
       if (oldCake) oldCake.remove();
+      const oldUmbrella = slot.querySelector('.slot-umbrella');
+      if (oldUmbrella) oldUmbrella.remove();
       if (filled) {
         const item = document.createElement('span');
-        item.className = itemType === 'helmet' ? 'slot-helmet' : itemType === 'fish' ? 'slot-fish' : itemType === 'wall' ? 'slot-wall' : itemType === 'cake' ? 'slot-cake' : 'slot-cannon';
+        item.className = itemType === 'helmet' ? 'slot-helmet' : itemType === 'fish' ? 'slot-fish' : itemType === 'wall' ? 'slot-wall' : itemType === 'cake' ? 'slot-cake' : itemType === 'umbrella' ? 'slot-umbrella' : 'slot-cannon';
         item.setAttribute('aria-label', itemType === 'helmet' ? '探照灯头盔' : itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : '大炮');
         if (itemType === 'cake') item.setAttribute('aria-label', '蛋糕');
+        if (itemType === 'umbrella') item.setAttribute('aria-label', '保护伞');
         slot.appendChild(item);
       }
-      slot.title = filled ? `按 ${index + 1} 使用${itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : itemType === 'cannon' ? '大炮' : '探照灯头盔'}` : `物品栏 ${index + 1}`;
+      slot.title = filled ? `按 ${index + 1} 使用${itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : itemType === 'cannon' ? '大炮' : itemType === 'cake' ? '蛋糕' : itemType === 'umbrella' ? '保护伞' : '探照灯头盔'}` : `物品栏 ${index + 1}`;
     });
   }
 
@@ -679,6 +707,7 @@
     drawShopBuilding();
     for (const debris of state.debris) drawDebris(debris);
     for (const wall of state.walls) drawWall(wall);
+    for (const umbrella of state.umbrellas) drawUmbrella(umbrella);
     for (const gem of state.gemsOnGround) {
       const blink = gem.age < 8 ? 1 : .28 + (Math.sin(gem.age * 22) + 1) * .36;
       drawGem(gem.x, gem.y, 1.05 + Math.sin(gem.spin) * .08, '#53e1d1', blink);
@@ -818,6 +847,30 @@
     ctx.fillStyle = '#aababa';
     ctx.fillRect(-13, -8, 8, 5);
     ctx.fillRect(9, 0, 7, 4);
+    ctx.restore();
+  }
+
+  function drawUmbrella(umbrella) {
+    ctx.save();
+    ctx.translate(umbrella.x, umbrella.y);
+    const wear = umbrella.hits / 3;
+    ctx.strokeStyle = '#3a4a51';
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 56); ctx.stroke();
+    ctx.fillStyle = `rgba(246, ${168 - wear * 45}, ${91 + wear * 30}, .92)`;
+    ctx.strokeStyle = '#273942';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-112, 4); ctx.quadraticCurveTo(0, -92, 112, 4);
+    ctx.lineTo(72, 2); ctx.quadraticCurveTo(55, -24, 38, 3);
+    ctx.quadraticCurveTo(18, -27, 0, 4);
+    ctx.quadraticCurveTo(-18, -27, -38, 3);
+    ctx.quadraticCurveTo(-55, -24, -72, 2);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (umbrella.hits > 0) {
+      ctx.strokeStyle = 'rgba(52, 42, 46, .8)'; ctx.lineWidth = 3;
+      for (let i = 0; i < umbrella.hits; i++) { ctx.beginPath(); ctx.moveTo(-38 + i * 35, -30); ctx.lineTo(-20 + i * 38, 5); ctx.stroke(); }
+    }
     ctx.restore();
   }
 
@@ -1213,6 +1266,10 @@
     buyInventoryItem('cake', 9, '蛋糕已放入物品栏');
   }
 
+  function buyUmbrella() {
+    buyInventoryItem('umbrella', 14, '保护伞已放入物品栏');
+  }
+
   function buyInventoryItem(type, cost, message) {
     const slot = state.inventory.findIndex(item => !item);
     if (slot < 0) { showToast('物品栏已满'); return; }
@@ -1243,6 +1300,11 @@
       placeWall(p.x + Math.cos(p.facing) * 52, p.y + Math.sin(p.facing) * 52);
       state.inventory[index] = null;
       showToast('防护墙体已部署');
+    } else if (item === 'umbrella') {
+      if (p.cannon) { showToast('离开炮台后再部署保护伞'); return; }
+      placeUmbrella(p.x + Math.cos(p.facing) * 48, p.y + Math.sin(p.facing) * 48);
+      state.inventory[index] = null;
+      showToast('保护伞已撑起，可拦截 3 次落石');
     } else if (item === 'cake') {
       p.speedBuff += 10;
       state.inventory[index] = null;
@@ -1302,6 +1364,7 @@
   ui.buyFish.addEventListener('click', buyFish);
   ui.buyWall.addEventListener('click', buyWall);
   ui.buyCake.addEventListener('click', buyCake);
+  ui.buyUmbrella.addEventListener('click', buyUmbrella);
   ui.resume.addEventListener('click', () => { paused = false; ui.pause.hidden = true; last = performance.now(); });
   ui.menuStart.addEventListener('click', startGame);
   ui.menuSkins.addEventListener('click', () => showMenuPage('skins'));
