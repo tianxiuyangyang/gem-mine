@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#151b26" />
+    <title>宝石矿井</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <canvas id="game" aria-label="宝石矿井游戏画面"></canvas>
+
+      <header class="hud">
+        <div class="brand">
+          <span class="brand-gem" aria-hidden="true"></span>
+          <div>
+            <p>THE GEM MINE</p>
+            <h1>宝石矿井</h1>
+          </div>
+        </div>
+        <div class="gem-counter" aria-live="polite">
+          <span class="gem-icon" aria-hidden="true"></span>
+          <span id="gem-count">0</span>
+        </div>
+      </header>
+
+      <div class="health-hud" aria-label="玩家生命值">
+        <div class="health-heading"><span>生命值</span><b id="health-text">100 / 100</b></div>
+        <div class="health-track"><div id="health-fill"></div></div>
+      </div>
+
+      <aside class="inventory" aria-label="玩家物品栏">
+        <div class="inventory-heading"><span>物品栏</span><small>INVENTORY</small></div>
+        <div id="inventory-slots" class="inventory-slots">
+          <button class="inventory-slot" data-slot="0" type="button"><span class="slot-number">1</span></button>
+          <button class="inventory-slot" data-slot="1" type="button"><span class="slot-number">2</span></button>
+          <button class="inventory-slot" data-slot="2" type="button"><span class="slot-number">3</span></button>
+          <button class="inventory-slot" data-slot="3" type="button"><span class="slot-number">4</span></button>
+          <button class="inventory-slot" data-slot="4" type="button"><span class="slot-number">5</span></button>
+          <button class="inventory-slot" data-slot="5" type="button"><span class="slot-number">6</span></button>
+        </div>
+      </aside>
+
+      <aside id="buff-hud" class="buff-hud" hidden aria-live="polite">
+        <span class="buff-cake" aria-hidden="true"></span>
+        <span id="buff-text">糖分冲刺 · x2</span>
+      </aside>
+
+      <aside class="status-panel">
+        <div class="wave-line"><span class="signal-dot"></span><span id="wave-text">下一班列车正在装载</span></div>
+      </aside>
+
+      <div id="hint" class="hint">按 <kbd>E</kbd> 操控炮台</div>
+
+      <section id="shop" class="shop" aria-label="矿井补给站">
+        <div class="shop-sign"><span>矿井补给站</span><small>RAILWAY SUPPLIES</small></div>
+        <button id="buy-cannon" type="button">
+          <span class="shop-cannon" aria-hidden="true"></span>
+          <span class="buy-copy"><b>补充大炮</b><small>购买后按 Q 放置</small></span>
+          <span class="price"><i class="gem-icon"></i>12</span>
+        </button>
+        <button id="buy-helmet" type="button">
+          <span class="shop-helmet" aria-hidden="true"></span>
+          <span class="buy-copy"><b>探照灯头盔</b><small>购买后自动佩戴，减伤</small></span>
+          <span class="price"><i class="gem-icon"></i>18</span>
+        </button>
+        <button id="buy-fish" type="button">
+          <span class="shop-fish" aria-hidden="true"></span>
+          <span class="buy-copy"><b>鱼罐头</b><small>按对应数字键食用，恢复 20 生命</small></span>
+          <span class="price"><i class="gem-icon"></i>6</span>
+        </button>
+        <button id="buy-wall" type="button">
+          <span class="shop-wall" aria-hidden="true"></span>
+          <span class="buy-copy"><b>防护墙体</b><small>按对应数字键部署，可挡 3 发子弹</small></span>
+          <span class="price"><i class="gem-icon"></i>10</span>
+        </button>
+        <button id="buy-cake" type="button">
+          <span class="shop-cake" aria-hidden="true"></span>
+          <span class="buy-copy"><b>蛋糕</b><small>按对应数字键食用，移速翻倍 10 秒</small></span>
+          <span class="price"><i class="gem-icon"></i>9</span>
+        </button>
+      </section>
+
+      <div id="toast" role="status" aria-live="polite"></div>
+
+      <section id="pause-screen" class="pause-screen" hidden>
+        <div class="pause-card">
+          <p class="eyebrow">矿井已静止</p>
+          <h2>暂停中</h2>
+          <div class="controls">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动小矿工</span></div>
+            <div><kbd>E</kbd><span>靠近炮台后操控 / 离开</span></div>
+            <div><span class="mouse-key">LMB</span><span>朝鼠标方向开炮</span></div>
+            <div><kbd>Q</kbd><span>放置持有的大炮</span></div>
+            <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd><kbd>6</kbd><span>使用对应物品栏物品</span></div>
+            <div><kbd>ESC</kbd><span>继续游戏</span></div>
+          </div>
+          <button id="resume" type="button">继续挖矿</button>
+        </div>
+      </section>
+
+      <section id="start-screen" class="start-screen">
+        <div id="main-menu" class="main-menu">
+          <div class="menu-gem" aria-hidden="true"></div>
+          <p class="eyebrow">CAT MINER'S SHIFT</p>
+          <h2>宝石矿井</h2>
+          <p class="menu-tagline">守住铁轨，炸翻运宝石的火车。</p>
+          <div class="menu-actions">
+            <button id="menu-start" class="menu-button primary" type="button">开始游戏</button>
+            <button id="menu-skins" class="menu-button" type="button">切换皮肤</button>
+            <button id="menu-tutorial" class="menu-button" type="button">游戏教程</button>
+            <button id="menu-multiplayer" class="menu-button" type="button" disabled>多人联机 <small>未开发</small></button>
+            <button id="menu-settings" class="menu-button" type="button">设置</button>
+          </div>
+          <small class="menu-footnote">WASD 移动 · E 操控炮台 · ESC 暂停</small>
+        </div>
+
+        <div id="menu-pages" class="menu-pages" hidden>
+          <section id="skins-page" class="menu-page" hidden>
+            <p class="eyebrow">YOUR MINER</p>
+            <h3>选择皮肤</h3>
+            <div class="skin-options">
+              <button class="skin-option" data-skin="peach" type="button"><span class="skin-preview skin-peach"></span><b>蜜桃猫</b></button>
+              <button class="skin-option" data-skin="snow" type="button"><span class="skin-preview skin-snow"></span><b>雪团猫</b></button>
+              <button class="skin-option" data-skin="mint" type="button"><span class="skin-preview skin-mint"></span><b>薄荷猫</b></button>
+            </div>
+            <button class="menu-back" data-menu-back type="button">返回主菜单</button>
+          </section>
+
+          <section id="tutorial-page" class="menu-page" hidden>
+            <p class="eyebrow">MINER'S HANDBOOK</p>
+            <h3>游戏教程</h3>
+            <div class="tutorial-list">
+              <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动矿工，躲开散弹</span></div>
+              <div><kbd>E</kbd><span>靠近炮台后接管或离开</span></div>
+              <div><span class="mouse-key">LMB</span><span>瞄准并发射炮弹，冷却 5 秒</span></div>
+              <div><kbd>Q</kbd><span>从物品栏放置一门大炮</span></div>
+              <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd><kbd>6</kbd><span>使用对应物品栏物品</span></div>
+              <div><kbd>ESC</kbd><span>暂停游戏并查看按键教学</span></div>
+            </div>
+            <p class="tutorial-note">火车头无法被炸毁，优先击破带宝石的车厢。宝石掉落 10 秒后会消失。</p>
+            <div class="tutorial-guide">
+              <section>
+                <h4>值班目标</h4>
+                <p>守住矿井中的自己，并尽量击毁运送宝石的火车车厢。每一轮火车都会沿轨道穿过地图，火车头上的怪物会持续追踪并射击。火车头无法被炮弹摧毁，只有车厢可以破坏。</p>
+              </section>
+              <section>
+                <h4>移动与炮台</h4>
+                <p>使用 WASD 移动。靠近已部署的大炮后按 E 接管或离开炮台；接管时鼠标决定炮口方向，左键发射炮弹。每门大炮发射后有 5 秒冷却，炮台底部的进度条会显示充能状态。按 Q 或点击物品栏中的大炮可以把它部署到面朝的地面上。</p>
+              </section>
+              <section>
+                <h4>宝石与商店</h4>
+                <p>摧毁宝石车厢会掉出宝石，靠近即可拾取。无人拾取的宝石会在 10 秒后消失，并在最后几秒闪烁。前往地图右下角的补给站，在附近才能消费宝石购买物品。所有可携带物品都会进入右侧六格物品栏，按对应数字键或用鼠标左键点击格子即可使用。</p>
+              </section>
+              <section>
+                <h4>物品说明</h4>
+                <p>大炮可以部署并操控；探照灯头盔会自动佩戴，让怪物子弹伤害从 30 降为 10，落石伤害从 20 降为 5；鱼罐头恢复 20 生命；防护墙体可阻挡子弹，承受 3 发后会破碎并留下残渣；蛋糕提供 10 秒的双倍移速，右上角会显示剩余时间。</p>
+              </section>
+              <section>
+                <h4>怪物与地震</h4>
+                <p>怪物会旋转散弹枪瞄准玩家。从第二轮火车开始，每次散射 5 发子弹。子弹碰到地图边缘、墙体或玩家后会消失。游戏每 60 秒发生一次持续 10 秒的地震，天空会不断落下巨石；巨石砸中玩家会造成伤害，砸中非车头车厢会直接摧毁车厢并让宝石掉落，砸中大炮或防护墙体也会将其摧毁。每次巨石撞击后都会在地面留下与体积相符的碎石堆。</p>
+              </section>
+              <section>
+                <h4>生命与失败</h4>
+                <p>玩家初始拥有 100 点生命。生命降至 0 时本局结束，可选择重新开始或返回主菜单。按 ESC 可随时暂停游戏并查看基础按键提示。</p>
+              </section>
+            </div>
+            <button class="menu-back" data-menu-back type="button">返回主菜单</button>
+          </section>
+
+          <section id="settings-page" class="menu-page" hidden>
+            <p class="eyebrow">MINE SETTINGS</p>
+            <h3>设置</h3>
+            <button id="toggle-shake" class="setting-toggle" type="button">画面震动：开启</button>
+            <p class="settings-note">设置会在本次游戏中生效。</p>
+            <button class="menu-back" data-menu-back type="button">返回主菜单</button>
+          </section>
+        </div>
+
+        <div class="start-card">
+          <div class="start-gem" aria-hidden="true"></div>
+          <p class="eyebrow">CAT MINER'S SHIFT</p>
+          <h2>宝石矿井</h2>
+          <p>守住铁轨，炸翻运宝石的火车。</p>
+          <button id="start" type="button">开始值班</button>
+          <small>WASD 移动 · E 操控炮台 · ESC 暂停</small>
+        </div>
+      </section>
+
+      <section id="game-over" class="game-over" hidden>
+        <div class="game-over-card">
+          <p class="eyebrow">SHIFT ENDED</p>
+          <h2>游戏结束</h2>
+          <p>矿工的生命值已经归零。</p>
+          <div class="game-over-actions">
+            <button id="restart" class="menu-button primary" type="button">重新开始</button>
+            <button id="game-over-menu" class="menu-button" type="button">返回主菜单</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>
