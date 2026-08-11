@@ -922,6 +922,7 @@
       ctx.strokeStyle = '#2b363b'; ctx.lineWidth = 4; ctx.stroke();
       ctx.fillStyle = 'rgba(249, 221, 115, .17)'; ctx.beginPath(); ctx.moveTo(-67, -20); ctx.lineTo(-105, 26); ctx.lineTo(-28, 26); ctx.closePath(); ctx.fill();
       for (const [x, y, size] of [[-17, 6, 10], [12, 22, 12], [30, 1, 8]]) drawGem(x, y, size / 13, '#7ff5e1', .92);
+      ctx.restore();
     } else {
       ctx.fillStyle = '#777a7e';
       for (const [x, y, r] of [[-48, 30, 26], [-13, 17, 31], [23, 28, 29], [52, 35, 20]]) {
