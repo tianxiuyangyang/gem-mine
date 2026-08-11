@@ -73,6 +73,7 @@
   };
 
   const MAP_SCALE = 1.5;
+  const TRAIN_BASE_SPEED = 58;
   const world = { w: 1800 * MAP_SCALE, h: 1100 * MAP_SCALE, cameraX: 0, cameraY: 0 };
   const rail = { bandTop: 350 * MAP_SCALE, bandHeight: 112 * MAP_SCALE, upper: 370 * MAP_SCALE, lower: 440 * MAP_SCALE, center: 405 * MAP_SCALE };
   const shopZone = { x: 1510 * MAP_SCALE, y: 860 * MAP_SCALE, w: 220 * MAP_SCALE, h: 155 * MAP_SCALE };
@@ -165,7 +166,8 @@
   function spawnTrain() {
     const hasGemCar = Math.random() > .18;
     state.trainRound++;
-    const train = { x: -300, y: rail.center, round: state.trainRound, speed: 58 + Math.min(state.time * .45, 35), destroyed: false, cars: [], monster: { cooldown: 1.8, flash: 0, angle: Math.PI } };
+    const splitWeapon = state.time >= 45 && Math.random() < .5;
+    const train = { x: -300, y: rail.center, round: state.trainRound, speed: TRAIN_BASE_SPEED, destroyed: false, cars: [], monster: { cooldown: 1.8, flash: 0, angle: Math.PI, weapon: splitWeapon ? 'splitter' : 'shotgun' } };
     train.cars.push({ offset: 0, type: 'engine', hp: 2, radius: 40, destroyed: false });
     train.cars.push({ offset: -96, type: hasGemCar ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
     train.cars.push({ offset: -180, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
@@ -190,6 +192,12 @@
     const dx = state.player.x - engine.x;
     const dy = state.player.y - engine.y;
     const base = monster.angle;
+    if (monster.weapon === 'splitter') {
+      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 105, vy: Math.sin(base) * 105, radius: 16, type: 'splitter' });
+      monster.cooldown = 1.8;
+      monster.flash = .16;
+      return;
+    }
     const spreadCount = train.round >= 2 ? 5 : 3;
     const spreadHalf = Math.floor(spreadCount / 2);
     for (let i = -spreadHalf; i <= spreadHalf; i++) {
@@ -198,6 +206,26 @@
     }
     monster.cooldown = 1.65;
     monster.flash = .16;
+  }
+
+  function splitBullet(bullet) {
+    if (bullet.spent) return;
+    bullet.spent = true;
+    emit(bullet.x, bullet.y, '#b68cff', 16, 155);
+    const baseAngle = Math.atan2(bullet.vy, bullet.vx);
+    const shardCount = 6;
+    for (let i = 0; i < shardCount; i++) {
+      const angle = baseAngle + i / shardCount * TAU + Math.PI / shardCount;
+      state.bullets.push({ x: bullet.x, y: bullet.y, vx: Math.cos(angle) * 126, vy: Math.sin(angle) * 126, radius: 7, type: 'splitShard', hitPlayer: false });
+    }
+  }
+
+  function trainSpeedMultiplier() {
+    if (state.time >= 120) return 3;
+    if (state.time >= 90) return 2.5;
+    if (state.time >= 60) return 2;
+    if (state.time >= 30) return 1.5;
+    return 1;
   }
 
   function explode(x, y, radius = 104) {
@@ -359,6 +387,7 @@
     }
     for (const train of state.trains) {
       if (!train.destroyed) {
+        train.speed = TRAIN_BASE_SPEED * trainSpeedMultiplier();
         train.x += train.speed * dt;
         train.monster.angle = Math.atan2(state.player.y - (train.y - 17), state.player.x - train.x);
         train.monster.cooldown -= dt;
@@ -398,10 +427,26 @@
     for (const bullet of state.bullets) {
       bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
+      const outsideMap = bullet.x < 0 || bullet.y < 0 || bullet.x > world.w || bullet.y > world.h;
+      if (bullet.type === 'splitter' && outsideMap) {
+        bullet.x = clamp(bullet.x, 0, world.w);
+        bullet.y = clamp(bullet.y, 0, world.h);
+        splitBullet(bullet);
+        continue;
+      }
       const wall = state.walls.find(candidate => candidate.hits < 3 && circleHit(bullet, candidate));
       if (wall) {
+        if (bullet.type === 'splitter') {
+          damageWall(wall);
+          splitBullet(bullet);
+          continue;
+        }
         bullet.blocked = true;
         damageWall(wall);
+        continue;
+      }
+      if (bullet.type === 'splitter' && circleHit(bullet, p)) {
+        splitBullet(bullet);
         continue;
       }
       if (!bullet.hitPlayer && circleHit(bullet, p)) {
@@ -410,6 +455,10 @@
       }
       if (bullet.spent && !bullet.damaged && p.hitCooldown <= 0 && circleHit(bullet, p)) {
         bullet.damaged = true;
+        if (bullet.type === 'splitShard') {
+          damagePlayer(25, 8, '分裂弹命中');
+          continue;
+        }
         p.hitCooldown = .2;
         const damage = p.helmet ? 10 : 30;
         p.health = Math.max(0, p.health - damage);
@@ -867,7 +916,10 @@
     ctx.save();
     ctx.translate(9, 8);
     ctx.rotate(monster.angle || 0);
-    ctx.fillStyle = '#33444a'; ctx.fillRect(0, 0, 24, 7); ctx.fillRect(18, -3, 13, 5);
+    ctx.fillStyle = monster.weapon === 'splitter' ? '#704d91' : '#33444a';
+    ctx.fillRect(0, 0, 24, 7);
+    ctx.fillRect(18, -3, 13, 5);
+    if (monster.weapon === 'splitter') ctx.fillRect(18, 6, 13, 5);
     if (monster.flash) { ctx.fillStyle = '#fff1a1'; ctx.beginPath(); ctx.arc(34, 2, 8, 0, TAU); ctx.fill(); }
     ctx.restore();
     ctx.restore();
@@ -944,7 +996,22 @@
   }
 
   function drawShell(s) { ctx.fillStyle = '#fff1a5'; ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, TAU); ctx.fill(); ctx.strokeStyle = '#df774d'; ctx.lineWidth = 2; ctx.stroke(); }
-  function drawBullet(b) { ctx.fillStyle = '#ed8460'; ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff0af'; ctx.beginPath(); ctx.arc(b.x - 2, b.y - 2, 2, 0, TAU); ctx.fill(); }
+  function drawBullet(b) {
+    if (b.type === 'splitter') {
+      ctx.fillStyle = 'rgba(182, 140, 255, .24)';
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.radius * 1.65, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#a87eff';
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#f4ddff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      return;
+    }
+    ctx.fillStyle = b.type === 'splitShard' ? '#c09aff' : '#ed8460';
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff0af';
+    ctx.beginPath(); ctx.arc(b.x - 2, b.y - 2, 2, 0, TAU); ctx.fill();
+  }
   function drawParticle(p) { ctx.globalAlpha = p.life / p.maxLife; ctx.fillStyle = p.color; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); ctx.globalAlpha = 1; }
 
   function startGame() {
