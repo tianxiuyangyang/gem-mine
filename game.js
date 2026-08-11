@@ -67,6 +67,7 @@
     trainTimer: 6,
     trainRound: 0,
     fallingRocks: [],
+    gemMine: { x: 175, y: 0, repaired: false, productionTimer: 3 },
     nextEarthquakeAt: 60,
     earthquakeEnd: 0,
     rockTimer: 0,
@@ -118,6 +119,7 @@
     state.trainTimer = 6;
     state.trainRound = 0;
     state.fallingRocks = [];
+    state.gemMine = { x: 175, y: world.h - 180, repaired: false, productionTimer: 3 };
     state.nextEarthquakeAt = 60;
     state.earthquakeEnd = 0;
     state.rockTimer = 0;
@@ -224,7 +226,7 @@
       return;
     }
     if (monster.weapon === 'sniper') {
-      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 360, vy: Math.sin(base) * 360, radius: 8, type: 'sniper' });
+      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 720, vy: Math.sin(base) * 720, radius: 8, type: 'sniper' });
       monster.cooldown = 2.05;
       monster.flash = .16;
       return;
@@ -295,6 +297,7 @@
     updateShells(dt);
     updateBullets(dt);
     updateGems(dt);
+    updateGemMine(dt);
     updateParticles(dt);
     state.screenShake = Math.max(0, state.screenShake - dt * 35);
     updateCamera();
@@ -517,7 +520,7 @@
           continue;
         }
         p.hitCooldown = .2;
-        const damage = p.helmet ? 10 : 30;
+        const damage = bullet.type === 'sniper' ? (p.helmet ? 10 : 45) : (p.helmet ? 10 : 30);
         p.health = Math.max(0, p.health - damage);
         emit(p.x, p.y, '#ff9075', 10, 120);
         state.screenShake = state.reducedMotion ? 0 : 6;
@@ -576,6 +579,16 @@
     state.gemsOnGround = state.gemsOnGround.filter(g => !g.picked && g.age < 10);
   }
 
+  function updateGemMine(dt) {
+    const mine = state.gemMine;
+    if (!mine.repaired) return;
+    mine.productionTimer -= dt;
+    if (mine.productionTimer > 0) return;
+    mine.productionTimer += 3;
+    state.gemsOnGround.push({ x: mine.x + 62, y: mine.y + 26, vx: rand(8, 24), vy: rand(-12, 12), radius: 9, spin: Math.random() * TAU, age: 0, picked: false });
+    emit(mine.x + 62, mine.y + 26, '#69f5df', 6, 70);
+  }
+
   function updateParticles(dt) {
     for (const p of state.particles) {
       p.x += p.vx * dt;
@@ -605,8 +618,10 @@
       ui.hint.classList.add('visible');
     } else {
       const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake' || item === 'umbrella');
-      ui.hint.innerHTML = nearest ? '按 <kbd>E</kbd> 操控炮台' : state.cannonInventory ? '按 <kbd>Q</kbd> 放置大炮' : hasQuickItem ? '按物品栏数字键使用物品' : '';
-      ui.hint.classList.toggle('visible', Boolean(nearest || state.cannonInventory || hasQuickItem));
+      const nearMine = isNearGemMine();
+      const mineHint = nearMine && !state.gemMine.repaired ? (state.gems >= 20 ? '按 <kbd>R</kbd> 修复宝石矿井（20 宝石）' : '需要 20 个宝石才能修复矿井') : '';
+      ui.hint.innerHTML = nearest ? '按 <kbd>E</kbd> 操控炮台' : mineHint || (state.cannonInventory ? '按 <kbd>Q</kbd> 放置大炮' : hasQuickItem ? '按物品栏数字键使用物品' : '');
+      ui.hint.classList.toggle('visible', Boolean(nearest || mineHint || state.cannonInventory || hasQuickItem));
     }
     ui.wave.textContent = state.trains.length ? `第 ${state.trains[0].round} 轮火车正在穿过矿井` : `第 ${state.trainRound + 1} 轮列车 ${Math.ceil(Math.max(0, state.trainTimer))} 秒`;
     const nearShop = isNearShop();
@@ -695,6 +710,22 @@
     return distance(state.player, { x: shopZone.x + shopZone.w / 2, y: shopZone.y + shopZone.h / 2 }) < 250;
   }
 
+  function isNearGemMine() {
+    return distance(state.player, state.gemMine) < 170;
+  }
+
+  function repairGemMine() {
+    if (state.gemMine.repaired) return;
+    if (!isNearGemMine()) return;
+    if (state.gems < 20) { showToast('需要 20 个宝石才能修复宝石矿井'); return; }
+    state.gems -= 20;
+    state.gemMine.repaired = true;
+    state.gemMine.productionTimer = 3;
+    emit(state.gemMine.x, state.gemMine.y, '#69f5df', 22, 130);
+    showToast('宝石矿井修复完成，每 3 秒产出一颗宝石');
+    syncUI();
+  }
+
   function draw() {
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.save();
@@ -704,6 +735,7 @@
     drawGround();
     drawRail();
     drawShopBuilding();
+    drawGemMine();
     for (const debris of state.debris) drawDebris(debris);
     for (const wall of state.walls) drawWall(wall);
     for (const umbrella of state.umbrellas) drawUmbrella(umbrella);
@@ -846,6 +878,27 @@
     ctx.fillStyle = '#aababa';
     ctx.fillRect(-13, -8, 8, 5);
     ctx.fillRect(9, 0, 7, 4);
+    ctx.restore();
+  }
+
+  function drawGemMine() {
+    const mine = state.gemMine;
+    ctx.save();
+    ctx.translate(mine.x, mine.y);
+    ctx.fillStyle = '#15242d';
+    ctx.fillRect(-72, -42, 146, 92);
+    ctx.fillStyle = mine.repaired ? '#357b78' : '#4e4d58';
+    ctx.fillRect(-62, -31, 126, 80);
+    ctx.fillStyle = '#0c151d';
+    ctx.beginPath(); ctx.ellipse(2, 20, 43, 31, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = mine.repaired ? '#69f5df' : '#747c84';
+    ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = '#f5e4a8'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(mine.repaired ? '宝石矿井' : '待修复矿井', 0, -50);
+    if (mine.repaired) {
+      ctx.fillStyle = '#69f5df'; ctx.beginPath(); ctx.arc(48, -16, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#d7ffff'; ctx.font = 'bold 11px sans-serif'; ctx.fillText('3s', 48, -12);
+    }
     ctx.restore();
   }
 
@@ -1331,7 +1384,7 @@
   }
 
   window.addEventListener('keydown', event => {
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyR', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
     keys.add(event.code);
     if (!started || gameOver) return;
     if (event.code === 'Escape' && !event.repeat) {
@@ -1344,6 +1397,7 @@
     if (event.code === 'KeyQ' && !state.player.cannon && state.cannonInventory) {
       placeFirstCannon();
     }
+    if (event.code === 'KeyR' && !event.repeat) repairGemMine();
     if (event.code.startsWith('Digit')) useInventorySlot(Number(event.code.slice(-1)) - 1);
   });
   window.addEventListener('keyup', event => keys.delete(event.code));
