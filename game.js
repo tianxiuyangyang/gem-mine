@@ -668,7 +668,7 @@
       }
       const wall = state.walls.find(candidate => candidate.hits < 3 && circleHit(bullet, candidate));
       if (wall) {
-        if (bullet.type === 'splitShard' && bullet.wallBounces < 1) {
+        if (bullet.type === 'splitShard' && bullet.wallBounces < 2) {
           const dx = bullet.x - wall.x;
           const dy = bullet.y - wall.y;
           const length = Math.max(Math.hypot(dx, dy), 1);
