@@ -6,8 +6,18 @@
     healthText: document.querySelector('#health-text'),
     healthFill: document.querySelector('#health-fill'),
     healthHud: document.querySelector('.health-hud'),
+    p2HealthHud: document.querySelector('#p2-health-hud'),
+    p2HealthText: document.querySelector('#p2-health-text'),
+    p2HealthFill: document.querySelector('#p2-health-fill'),
     wave: document.querySelector('#wave-text'),
     inventorySlots: [...document.querySelectorAll('.inventory-slot')],
+    p1InventorySlots: [...document.querySelectorAll('.inventory-slot:not(.p2-slot)')],
+    p2InventorySlots: [...document.querySelectorAll('.p2-slot')],
+    p2Inventory: document.querySelector('#p2-inventory'),
+    rescueHud: document.querySelector('#rescue-hud'),
+    rescueLabel: document.querySelector('#rescue-label'),
+    rescuePercent: document.querySelector('#rescue-percent'),
+    rescueFill: document.querySelector('#rescue-fill'),
     hint: document.querySelector('#hint'),
     shop: document.querySelector('#shop'),
     buy: document.querySelector('#buy-cannon'),
@@ -21,14 +31,21 @@
     toast: document.querySelector('#toast'),
     pause: document.querySelector('#pause-screen'),
     resume: document.querySelector('#resume'),
+    pauseTutorial: document.querySelector('#pause-tutorial'),
     pauseMenu: document.querySelector('#pause-menu'),
+    tutorialReturnPause: document.querySelector('#tutorial-return-pause'),
+    tutorialMainMenu: document.querySelector('#tutorial-main-menu'),
     start: document.querySelector('#start-screen'),
     mainMenu: document.querySelector('#main-menu'),
     menuPages: document.querySelector('#menu-pages'),
     menuStart: document.querySelector('#menu-start'),
+    menuTwoPlayer: document.querySelector('#menu-two-player'),
     menuSkins: document.querySelector('#menu-skins'),
     menuTutorial: document.querySelector('#menu-tutorial'),
     menuSettings: document.querySelector('#menu-settings'),
+    supportCreator: document.querySelector('#support-creator'),
+    supportModal: document.querySelector('#support-modal'),
+    supportClose: document.querySelector('#support-close'),
     skinPage: document.querySelector('#skins-page'),
     tutorialPage: document.querySelector('#tutorial-page'),
     settingsPage: document.querySelector('#settings-page'),
@@ -52,13 +69,18 @@
   let gameOver = false;
   let toastTimer = 0;
   let testGemPresses = [];
+  let testWeatherPresses = [];
+  let gameMode = 'single';
+  let weatherCanvas = null;
+  let weatherCtx = null;
   const audio = { context: null, musicEnabled: true, sfxEnabled: true, musicTimer: 0, musicStep: 0 };
 
   const state = {
     gems: 0,
-    cannonInventory: 1,
     inventory: Array(6).fill(null),
+    inventory2: Array(6).fill(null),
     player: { x: 0, y: 0, radius: 16, speed: 235, facing: 0, skin: 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, knockback: 0, knockbackVX: 0, knockbackVY: 0, knockbackSpin: 0, hitRotation: 0, speedBuff: 0, cannon: null },
+    player2: { x: 0, y: 0, radius: 16, speed: 235, facing: Math.PI, skin: 'snow', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, knockback: 0, knockbackVX: 0, knockbackVY: 0, knockbackSpin: 0, hitRotation: 0, speedBuff: 0, cannon: null, downed: false },
     cannons: [],
     walls: [],
     umbrellas: [],
@@ -77,6 +99,12 @@
     nextEarthquakeAt: 60,
     earthquakeEnd: 0,
     rockTimer: 0,
+    weather: null,
+    weatherEnd: 0,
+    nextWeatherAt: 80,
+    weatherCenter: { x: 0, y: 0 },
+    weatherDamageTimer: 0,
+    rescue: { rescuer: null, target: null, progress: 0 },
     time: 0,
     screenShake: 0,
     reducedMotion: false,
@@ -88,6 +116,7 @@
   const SHOTGUN_BULLET_SPEED = 93 * MONSTER_AMMO_SPEED_FACTOR * 1.8;
   const SPLIT_SHARD_SPEED = 126 * MONSTER_AMMO_SPEED_FACTOR;
   const SPLITTER_LARGE_SPEED = 105 * 1.5;
+  const WALL_MAX_HITS = 5;
   const world = { w: 1800 * MAP_SCALE, h: 1100 * MAP_SCALE, cameraX: 0, cameraY: 0 };
   const rail = { bandTop: 350 * MAP_SCALE, bandHeight: 112 * MAP_SCALE, upper: 370 * MAP_SCALE, lower: 440 * MAP_SCALE, center: 405 * MAP_SCALE };
   const shopZone = { x: 1510 * MAP_SCALE, y: 860 * MAP_SCALE, w: 220 * MAP_SCALE, h: 155 * MAP_SCALE };
@@ -110,9 +139,11 @@
 
   function resetGame() {
     const selectedSkin = state.player.skin || 'peach';
+    testGemPresses = [];
+    testWeatherPresses = [];
     state.gems = 0;
-    state.cannonInventory = 1;
     state.inventory = Array(6).fill(null);
+    state.inventory2 = Array(6).fill(null);
     state.cannons = [];
     state.walls = [];
     state.umbrellas = [];
@@ -131,13 +162,19 @@
     state.nextEarthquakeAt = 60;
     state.earthquakeEnd = 0;
     state.rockTimer = 0;
+    state.weather = null;
+    state.weatherEnd = 0;
+    state.nextWeatherAt = 80;
+    state.weatherCenter = { x: 0, y: 0 };
+    state.weatherDamageTimer = 0;
+    state.rescue = { rescuer: null, target: null, progress: 0 };
     state.time = 0;
     world.cameraX = 0;
     world.cameraY = 0;
     state.screenShake = 0;
     state.player = { x: world.w * .42, y: world.h * .54, radius: 16, speed: 235, facing: 0, skin: selectedSkin, health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, knockback: 0, knockbackVX: 0, knockbackVY: 0, knockbackSpin: 0, hitRotation: 0, speedBuff: 0, cannon: null };
+    state.player2 = { x: world.w * .42 + 72, y: world.h * .54, radius: 16, speed: 235, facing: Math.PI, skin: selectedSkin === 'peach' ? 'snow' : 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, knockback: 0, knockbackVX: 0, knockbackVY: 0, knockbackSpin: 0, hitRotation: 0, speedBuff: 0, cannon: null, downed: false };
     placeCannon(state.player.x + 46, state.player.y + 4);
-    state.cannonInventory = 0;
     syncUI();
   }
 
@@ -154,8 +191,12 @@
   }
 
   function updateCamera() {
-    const targetX = state.player.x - innerWidth / 2;
-    const targetY = state.player.y - innerHeight / 2;
+    const livingPlayers = getActivePlayers();
+    const cameraPlayers = livingPlayers.length ? livingPlayers : getPlayers();
+    const focusX = cameraPlayers.reduce((sum, p) => sum + p.x, 0) / cameraPlayers.length;
+    const focusY = cameraPlayers.reduce((sum, p) => sum + p.y, 0) / cameraPlayers.length;
+    const targetX = focusX - innerWidth / 2;
+    const targetY = focusY - innerHeight / 2;
     world.cameraX += (targetX - world.cameraX) * .12;
     world.cameraY += (targetY - world.cameraY) * .12;
     world.cameraX = clamp(world.cameraX, 0, Math.max(0, world.w - innerWidth));
@@ -170,6 +211,9 @@
   function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
   function circleHit(a, b, extra = 0) { return distance(a, b) < a.radius + b.radius + extra; }
   function rand(min, max) { return min + Math.random() * (max - min); }
+  function isTwoPlayer() { return gameMode === 'coop'; }
+  function getPlayers() { return isTwoPlayer() ? [state.player, state.player2] : [state.player]; }
+  function getActivePlayers() { return getPlayers().filter(player => !player.downed); }
 
   function emit(x, y, color, amount, speed = 120) {
     for (let i = 0; i < amount; i++) {
@@ -196,7 +240,7 @@
   }
 
   function createMonster() {
-    return { cooldown: 1.8, flash: 0, angle: Math.PI, weapon: randomMonsterWeapon() };
+    return { cooldown: 1.8, flash: 0, angle: Math.PI, weapon: randomMonsterWeapon(), minerHelmet: Math.random() < .4 };
   }
 
   function trainCarPosition(train, car) {
@@ -226,11 +270,12 @@
     showToast('纵向火车驶入补给站铁轨！');
   }
 
-  function fireShell(cannon) {
+  function fireShell(cannon, angleOverride = null) {
     if (cannon.cooldown > 0) return;
     playSfx('cannon');
     const target = screenToWorld(mouse.x, mouse.y);
-    cannon.angle = Math.atan2(target.y - cannon.y, target.x - cannon.x);
+    if (angleOverride !== null) cannon.angle = angleOverride;
+    else cannon.angle = Math.atan2(target.y - cannon.y, target.x - cannon.x);
     state.shells.push({ x: cannon.x + Math.cos(cannon.angle) * 36, y: cannon.y + Math.sin(cannon.angle) * 36, vx: Math.cos(cannon.angle) * 570, vy: Math.sin(cannon.angle) * 570, radius: 7, life: 2.3 });
     cannon.cooldown = 5;
     cannon.flash = .14;
@@ -242,8 +287,10 @@
     const monster = engineCar.monster;
     const enginePosition = trainCarPosition(train, engineCar);
     const engine = train.vertical ? { x: enginePosition.x + 17, y: enginePosition.y } : { x: enginePosition.x, y: enginePosition.y - 17 };
-    const dx = state.player.x - engine.x;
-    const dy = state.player.y - engine.y;
+    const targets = getActivePlayers();
+    const target = targets.reduce((nearest, player) => !nearest || distance(player, engine) < distance(nearest, engine) ? player : nearest, null) || state.player;
+    const dx = target.x - engine.x;
+    const dy = target.y - engine.y;
     const base = monster.angle;
     if (monster.weapon === 'splitter') {
       playSfx('splitter');
@@ -322,7 +369,10 @@
   function update(dt) {
     state.time += dt;
     updateEarthquake(dt);
+    updateWeather(dt);
     updatePlayer(dt);
+    updatePlayer2(dt);
+    updateRescue(dt);
     updateCannon(dt);
     updateTrains(dt);
     updateShells(dt);
@@ -337,6 +387,16 @@
 
   function updatePlayer(dt) {
     const p = state.player;
+    updatePlayerMovement(p, dt, 'p1');
+  }
+
+  function updatePlayer2(dt) {
+    if (!isTwoPlayer()) return;
+    updatePlayerMovement(state.player2, dt, 'p2');
+  }
+
+  function updatePlayerMovement(p, dt, controls) {
+    if (p.downed) return;
     p.hitCooldown = Math.max(0, p.hitCooldown - dt);
     p.trainHitCooldown = Math.max(0, p.trainHitCooldown - dt);
     p.stun = Math.max(0, p.stun - dt);
@@ -361,16 +421,33 @@
     if (p.stun > 0) return;
     let dx = 0;
     let dy = 0;
-    if (keys.has('KeyW')) dy--;
-    if (keys.has('KeyS')) dy++;
-    if (keys.has('KeyA')) dx--;
-    if (keys.has('KeyD')) dx++;
+    if (controls === 'p1') {
+      if (keys.has('KeyW')) dy--;
+      if (keys.has('KeyS')) dy++;
+      if (keys.has('KeyA')) dx--;
+      if (keys.has('KeyD')) dx++;
+    } else {
+      if (keys.has('ArrowUp')) dy--;
+      if (keys.has('ArrowDown')) dy++;
+      if (keys.has('ArrowLeft')) dx--;
+      if (keys.has('ArrowRight')) dx++;
+    }
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
       const speed = p.speed * (p.speedBuff > 0 ? 2 : 1);
       p.x += dx / len * speed * dt;
       p.y += dy / len * speed * dt;
       p.facing = Math.atan2(dy, dx);
+    }
+    if (state.weather === 'typhoon') {
+      const force = 156;
+      const towardCenterX = state.weatherCenter.x - p.x;
+      const towardCenterY = state.weatherCenter.y - p.y;
+      const distanceToCenter = Math.hypot(towardCenterX, towardCenterY);
+      if (distanceToCenter > 1) {
+        p.x += towardCenterX / distanceToCenter * force * dt;
+        p.y += towardCenterY / distanceToCenter * force * dt;
+      }
     }
     p.x = clamp(p.x, 26, world.w - 26);
     p.y = clamp(p.y, 26, world.h - 26);
@@ -380,7 +457,8 @@
     for (const cannon of state.cannons) {
       cannon.cooldown = Math.max(0, cannon.cooldown - dt);
       cannon.flash = Math.max(0, cannon.flash - dt);
-      if (state.player.cannon === cannon) {
+      const controller = getPlayers().find(player => player.cannon === cannon);
+      if (controller) {
         const target = screenToWorld(mouse.x, mouse.y);
         cannon.angle = Math.atan2(target.y - cannon.y, target.x - cannon.x);
       }
@@ -451,8 +529,16 @@
     emit(impact.x, impact.y, '#8b9ba1', 16, 170);
     state.screenShake = state.reducedMotion ? 0 : 9;
 
-    if (state.player.hitCooldown <= 0 && circleHit(impact, state.player, 2)) {
-      damagePlayer(20, 5, '落石砸中了你');
+    for (const player of getActivePlayers()) {
+      if (player.hitCooldown <= 0 && circleHit(impact, player, 2)) {
+        if (player.helmet) {
+          player.helmet = false;
+          state.debris.push({ x: player.x, y: player.y + 8, rotation: Math.random() * TAU, kind: 'helmet' });
+          damagePlayer(10, 10, '落石砸碎了安全帽', player);
+        } else {
+          damagePlayer(20, 20, '落石砸中', player);
+        }
+      }
     }
 
     for (const train of state.trains) {
@@ -469,11 +555,55 @@
     state.cannons = state.cannons.filter(cannon => !cannon.destroyed);
 
     for (const wall of state.walls) {
-      if (wall.hits >= 3 || !circleHit(impact, wall, 1)) continue;
-      wall.hits = 2;
+      if (wall.hits >= WALL_MAX_HITS || !circleHit(impact, wall, 1)) continue;
+      wall.hits = WALL_MAX_HITS - 1;
       damageWall(wall);
     }
     state.umbrellas = state.umbrellas.filter(umbrella => !umbrella.destroyed);
+  }
+
+  function startWeatherEvent() {
+    const duration = state.time >= 240 ? 20 : 10;
+    state.weather = Math.random() < .5 ? 'typhoon' : 'sandstorm';
+    state.weatherEnd = state.time + duration;
+    if (state.weather === 'typhoon') {
+      const angle = Math.random() * TAU;
+      const radius = rand(220, 360);
+      state.weatherCenter = {
+        x: clamp(state.player.x + Math.cos(angle) * radius, 120, world.w - 120),
+        y: clamp(state.player.y + Math.sin(angle) * radius, 120, world.h - 120),
+      };
+      state.weatherDamageTimer = 0;
+      showToast('台风来袭！风向正在改变');
+    } else {
+      showToast('沙尘暴来袭！能见度降低');
+    }
+  }
+
+  function summonTestWeather() {
+    startWeatherEvent();
+    state.nextWeatherAt = state.time + 80;
+    showToast(state.weather === 'typhoon' ? '测试：台风已召唤' : '测试：沙尘暴已召唤');
+  }
+
+  function updateWeather(dt) {
+    if (!state.weather && state.time >= state.nextWeatherAt) {
+      startWeatherEvent();
+      state.nextWeatherAt += 80;
+    }
+    if (state.weather && state.time >= state.weatherEnd) {
+      state.weather = null;
+      state.weatherDamageTimer = 0;
+      showToast('恶劣天气结束');
+    }
+    if (state.weather !== 'typhoon') return;
+    state.weatherDamageTimer -= dt;
+    if (state.weatherDamageTimer > 0) return;
+    state.weatherDamageTimer += .1;
+    const windCore = { ...state.weatherCenter, radius: 44 };
+    for (const player of getActivePlayers()) {
+      if (circleHit(player, windCore)) damagePlayer(1, 1, '龙卷风中心撕扯', player);
+    }
   }
 
   function ensureAudio() {
@@ -542,13 +672,13 @@
     state.trainTimer -= dt;
     if (state.trainTimer <= 0) {
       spawnTrain();
-      state.trainTimer = rand(15, 21);
+      state.trainTimer = rand(15, 21) / trainSpawnRateMultiplier();
     }
     if (state.time >= 130) {
       state.verticalTrainTimer -= dt;
       if (state.verticalTrainTimer <= 0) {
         spawnVerticalTrain();
-        state.verticalTrainTimer = rand(12, 16.7);
+        state.verticalTrainTimer = rand(12, 16.7) / trainSpawnRateMultiplier();
       }
     }
     for (const train of state.trains) {
@@ -562,7 +692,9 @@
           const monster = car.monster;
           const enginePosition = trainCarPosition(train, car);
           const muzzle = train.vertical ? { x: enginePosition.x + 17, y: enginePosition.y } : { x: enginePosition.x, y: enginePosition.y - 17 };
-          monster.angle = Math.atan2(state.player.y - muzzle.y, state.player.x - muzzle.x);
+          const targets = getActivePlayers();
+          const target = targets.reduce((nearest, player) => !nearest || distance(player, muzzle) < distance(nearest, muzzle) ? player : nearest, null) || state.player;
+          monster.angle = Math.atan2(target.y - muzzle.y, target.x - muzzle.x);
           monster.cooldown -= dt;
           monster.flash = Math.max(0, monster.flash - dt);
           const inMap = train.vertical ? muzzle.y > 0 && muzzle.y < world.h + 80 : muzzle.x > 0 && muzzle.x < world.w + 80;
@@ -575,9 +707,14 @@
       : train.x < world.w + 340 && (!train.destroyed || train.x < world.w + 150));
   }
 
+  function trainSpawnRateMultiplier() {
+    if (state.time >= 180) return 3;
+    if (state.time >= 120) return 2;
+    return 1;
+  }
+
   function resolveTrainCollisions(train) {
-    const p = state.player;
-    for (const car of train.cars) {
+    for (const p of getActivePlayers()) for (const car of train.cars) {
       if (car.destroyed) continue;
       const carPosition = { ...trainCarPosition(train, car), radius: car.radius };
       const dx = p.x - carPosition.x;
@@ -612,7 +749,7 @@
           emit(p.x, p.y, '#ff9075', 22, 185);
           state.screenShake = state.reducedMotion ? 0 : 13;
           showToast('被火车头撞出轨道！眩晕 1 秒（-70）');
-          if (p.health <= 0) endGame();
+          if (p.health <= 0) downPlayer(p);
         }
         p.x = carPosition.x + pushX * (minDistance + 8);
         p.y = carPosition.y + pushY * (minDistance + 8);
@@ -650,7 +787,6 @@
   }
 
   function updateBullets(dt) {
-    const p = state.player;
     state.sniperTrails.forEach(segment => { segment.age += dt; });
     state.sniperTrails = state.sniperTrails.filter(segment => segment.age < 1);
     for (const bullet of state.bullets) {
@@ -666,7 +802,7 @@
         splitBullet(bullet);
         continue;
       }
-      const wall = state.walls.find(candidate => candidate.hits < 3 && circleHit(bullet, candidate));
+      const wall = state.walls.find(candidate => candidate.hits < WALL_MAX_HITS && circleHit(bullet, candidate));
       if (wall) {
         if (bullet.type === 'splitShard' && bullet.wallBounces < 2) {
           const dx = bullet.x - wall.x;
@@ -693,36 +829,30 @@
         damageWall(wall);
         continue;
       }
-      if (bullet.type === 'splitter' && circleHit(bullet, p)) {
-        splitBullet(bullet);
-        continue;
-      }
-      if (!bullet.hitPlayer && circleHit(bullet, p)) {
-        bullet.hitPlayer = true;
-        bullet.spent = true;
-      }
-      if (bullet.spent && !bullet.damaged && p.hitCooldown <= 0 && circleHit(bullet, p)) {
-        bullet.damaged = true;
-        if (bullet.type === 'splitShard') {
-          damagePlayer(25, 8, '分裂弹命中');
-          continue;
+      for (const p of getActivePlayers()) {
+        if (bullet.type === 'splitter' && circleHit(bullet, p)) { splitBullet(bullet); break; }
+        if (!bullet.hitPlayer && circleHit(bullet, p)) {
+          bullet.hitPlayer = true;
+          bullet.hitTarget = p;
+          bullet.spent = true;
         }
-        p.hitCooldown = .2;
-        const damage = bullet.type === 'sniper' ? (p.helmet ? 20 : 45) : (p.helmet ? 10 : 30);
-        p.health = Math.max(0, p.health - damage);
-        playSfx('hurt');
-        emit(p.x, p.y, '#ff9075', 10, 120);
-        state.screenShake = state.reducedMotion ? 0 : 6;
-        showToast(p.helmet ? `头盔挡下了伤害（-${damage}）` : `受到散弹伤害（-${damage}）`);
-        if (p.health <= 0) endGame();
+        if (bullet.spent && !bullet.damaged && bullet.hitTarget === p && p.hitCooldown <= 0 && circleHit(bullet, p)) {
+          bullet.damaged = true;
+          if (bullet.type === 'splitShard') damagePlayer(25, 8, '分裂弹命中', p);
+          else {
+            const damage = bullet.type === 'sniper' ? (p.helmet ? 20 : 45) : (p.helmet ? 10 : 30);
+            damagePlayer(damage, damage, bullet.type === 'sniper' ? '狙击弹命中' : '散弹命中', p);
+          }
+          break;
+        }
       }
     }
-    state.walls = state.walls.filter(wall => wall.hits < 3);
+    state.walls = state.walls.filter(wall => wall.hits < WALL_MAX_HITS);
     state.bullets = state.bullets.filter(b => !b.blocked && !b.spent && b.x >= 0 && b.y >= 0 && b.x <= world.w && b.y <= world.h);
   }
 
-  function damagePlayer(normalDamage, helmetDamage, source) {
-    const p = state.player;
+  function damagePlayer(normalDamage, helmetDamage, source, player = state.player) {
+    const p = player;
     const damage = p.helmet ? helmetDamage : normalDamage;
     p.hitCooldown = .2;
     p.health = Math.max(0, p.health - damage);
@@ -730,29 +860,67 @@
     emit(p.x, p.y, '#ff9075', 10, 120);
     state.screenShake = state.reducedMotion ? 0 : 6;
     showToast(p.helmet ? `头盔挡下了 ${source}（-${damage}）` : `${source}（-${damage}）`);
-    if (p.health <= 0) endGame();
+    if (p.health <= 0) downPlayer(p);
+  }
+
+  function downPlayer(player) {
+    if (player.downed) return;
+    if (!isTwoPlayer()) { endGame(); return; }
+    player.downed = true;
+    player.health = 0;
+    player.cannon = null;
+    player.stun = 0;
+    player.knockback = 0;
+    showToast(player === state.player ? 'P1 已倒地，P2 按 N 靠近救援' : 'P2 已倒地，P1 按 Q 靠近救援');
+    if (getActivePlayers().length === 0) endGame();
+  }
+
+  function revivePlayer(player, rescuer) {
+    if (!isTwoPlayer() || !player.downed || rescuer.downed || distance(player, rescuer) > 78) return false;
+    player.downed = false;
+    player.health = 1;
+    player.hitCooldown = 1;
+    emit(player.x, player.y, '#78efd9', 20, 120);
+    playSfx('heal');
+    showToast(player === state.player ? 'P1 已被救起，恢复 1 点生命' : 'P2 已被救起，恢复 1 点生命');
+    return true;
+  }
+
+  function updateRescue(dt) {
+    const rescue = state.rescue;
+    if (!isTwoPlayer() || !rescue.rescuer || !rescue.target) return;
+    const rescueKey = rescue.rescuer === state.player ? 'KeyQ' : 'KeyN';
+    const stillValid = !rescue.rescuer.downed && rescue.target.downed && distance(rescue.rescuer, rescue.target) <= 78 && keys.has(rescueKey);
+    if (!stillValid) {
+      state.rescue = { rescuer: null, target: null, progress: 0 };
+      return;
+    }
+    rescue.progress += dt;
+    if (rescue.progress >= 4) {
+      revivePlayer(rescue.target, rescue.rescuer);
+      state.rescue = { rescuer: null, target: null, progress: 0 };
+    }
   }
 
   function destroyCannon(cannon) {
     cannon.destroyed = true;
-    if (state.player.cannon === cannon) state.player.cannon = null;
+    for (const player of getPlayers()) if (player.cannon === cannon) player.cannon = null;
     emit(cannon.x, cannon.y, '#8ca7aa', 22, 180);
     showToast('大炮被落石砸毁');
   }
 
   function damageWall(wall) {
     wall.hits++;
-    emit(wall.x, wall.y, wall.hits >= 3 ? '#8e9c9d' : '#d4e0d7', 10, 115);
-    if (wall.hits >= 3) {
+    emit(wall.x, wall.y, wall.hits >= WALL_MAX_HITS ? '#8e9c9d' : '#d4e0d7', 10, 115);
+    if (wall.hits >= WALL_MAX_HITS) {
       state.debris.push({ x: wall.x, y: wall.y, rotation: Math.random() * TAU });
       showToast('防护墙体破碎了');
     } else {
-      showToast(`防护墙体受损（${wall.hits}/3）`);
+      showToast(`防护墙体受损（${wall.hits}/${WALL_MAX_HITS}）`);
     }
   }
 
   function updateGems(dt) {
-    const p = state.player;
     for (const gem of state.gemsOnGround) {
       gem.age += dt;
       gem.x += gem.vx * dt;
@@ -760,7 +928,7 @@
       gem.vx *= .9;
       gem.vy *= .9;
       gem.spin += dt * 6;
-      if (!gem.picked && distance(gem, p) < 33) {
+      if (!gem.picked && getActivePlayers().some(player => distance(gem, player) < 33)) {
         gem.picked = true;
         state.gems++;
         playSfx('gem');
@@ -797,43 +965,64 @@
     ui.healthFill.style.width = `${healthPct * 100}%`;
     ui.healthText.textContent = `${state.player.health} / ${state.player.maxHealth}`;
     ui.healthHud.classList.toggle('critical', healthPct <= .3);
+    ui.p2HealthHud.hidden = !isTwoPlayer();
+    if (isTwoPlayer()) {
+      const p2HealthPct = clamp(state.player2.health / state.player2.maxHealth, 0, 1);
+      ui.p2HealthFill.style.width = `${p2HealthPct * 100}%`;
+      ui.p2HealthText.textContent = `${state.player2.health} / ${state.player2.maxHealth}`;
+      ui.p2HealthHud.classList.toggle('critical', p2HealthPct <= .3);
+    }
     const hasSpeedBuff = state.player.speedBuff > 0;
     ui.buffHud.hidden = !hasSpeedBuff;
     if (hasSpeedBuff) ui.buffText.textContent = `糖分冲刺 · x2 · ${Math.ceil(state.player.speedBuff)} 秒`;
-    renderInventory();
+    ui.p2Inventory.hidden = !isTwoPlayer();
+    ui.rescueHud.hidden = !state.rescue.rescuer;
+    if (state.rescue.rescuer) {
+      const percent = clamp(state.rescue.progress / 4, 0, 1);
+      ui.rescueLabel.textContent = state.rescue.target === state.player ? 'P2 正在救援 P1' : 'P1 正在救援 P2';
+      ui.rescuePercent.textContent = `${Math.ceil(percent * 100)}%`;
+      ui.rescueFill.style.width = `${percent * 100}%`;
+    }
+    renderInventory(ui.p1InventorySlots, state.inventory, 'P1');
+    if (isTwoPlayer()) renderInventory(ui.p2InventorySlots, state.inventory2, 'P2');
     positionShop();
-    const cannon = state.player.cannon;
+    const cannon = getPlayers().find(player => player.cannon)?.cannon;
     const nearest = findNearestCannon();
     if (cannon) {
-      ui.hint.textContent = '鼠标瞄准 · 左键发射 · E 离开炮台';
+      ui.hint.textContent = state.player.cannon ? '鼠标瞄准 · 左键发射 · E 离开炮台' : '鼠标瞄准 · 左键发射 · M 离开炮台';
       ui.hint.classList.add('visible');
     } else {
       const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake' || item === 'umbrella');
+      const hasCannonItem = state.inventory.includes('cannon') || (isTwoPlayer() && state.inventory2.includes('cannon'));
       const nearMine = isNearGemMine();
       const mineHint = nearMine && !state.gemMine.repaired ? (state.gems >= 20 ? '点击宝石矿井修复（20 宝石）' : '需要 20 个宝石才能修复矿井') : '';
-      ui.hint.innerHTML = nearest ? '按 <kbd>E</kbd> 操控炮台' : mineHint || (state.cannonInventory ? '按 <kbd>Q</kbd> 放置大炮' : hasQuickItem ? '按物品栏数字键使用物品' : '');
-      ui.hint.classList.toggle('visible', Boolean(nearest || mineHint || state.cannonInventory || hasQuickItem));
+      const p2Nearest = isTwoPlayer() ? findNearestCannon(state.player2) : null;
+      ui.hint.innerHTML = nearest ? '按 <kbd>E</kbd> 操控炮台' : p2Nearest ? 'P2 按 <kbd>M</kbd> 操控炮台' : mineHint || (hasCannonItem ? '点击对应物品栏中的大炮放置' : hasQuickItem ? '点击物品栏使用物品' : '');
+      ui.hint.classList.toggle('visible', Boolean(nearest || p2Nearest || mineHint || hasCannonItem || hasQuickItem));
     }
     ui.wave.textContent = state.trains.length ? `第 ${state.trains[0].round} 轮火车正在穿过矿井` : `第 ${state.trainRound + 1} 轮列车 ${Math.ceil(Math.max(0, state.trainTimer))} 秒`;
-    const nearShop = isNearShop();
+    const nearShop = Boolean(getShopCustomer());
     if (state.time < state.earthquakeEnd) ui.wave.textContent = '地震中 · 落石来袭';
-    ui.buy.disabled = state.gems < 12 || !nearShop || state.inventory.every(item => item);
+    if (state.weather === 'typhoon') ui.wave.textContent = `台风中 · 强风持续 ${Math.ceil(state.weatherEnd - state.time)} 秒`;
+    if (state.weather === 'sandstorm') ui.wave.textContent = `沙尘暴中 · 能见度降低 ${Math.ceil(state.weatherEnd - state.time)} 秒`;
+    if (state.rescue.rescuer) ui.wave.textContent = `救援中 · ${Math.ceil(state.rescue.progress / 4 * 100)}%`;
+    ui.buy.disabled = state.gems < 12 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
     ui.buy.title = nearShop ? '购买一门大炮' : '靠近矿井补给站后购买';
-    ui.buyHelmet.disabled = state.gems < 18 || !nearShop || state.player.helmet || state.inventory.every(item => item);
-    ui.buyHelmet.title = state.player.helmet ? '探照灯头盔已佩戴' : nearShop ? '购买并佩戴探照灯头盔' : '靠近矿井补给站后购买';
-    ui.buyFish.disabled = state.gems < 6 || !nearShop || state.inventory.every(item => item);
+    ui.buyHelmet.disabled = state.gems < 18 || !nearShop || (getShopCustomer() || state.player).helmet || inventoryFor(getShopCustomer() || state.player).every(item => item);
+    ui.buyHelmet.title = (getShopCustomer() || state.player).helmet ? '探照灯头盔已佩戴' : nearShop ? '购买并佩戴探照灯头盔' : '靠近矿井补给站后购买';
+    ui.buyFish.disabled = state.gems < 6 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
     ui.buyFish.title = nearShop ? '购买鱼罐头' : '靠近矿井补给站后购买';
-    ui.buyWall.disabled = state.gems < 8 || !nearShop || state.inventory.every(item => item);
-    ui.buyCake.disabled = state.gems < 9 || !nearShop || state.inventory.every(item => item);
-    ui.buyUmbrella.disabled = state.gems < 14 || !nearShop || state.inventory.every(item => item);
+    ui.buyWall.disabled = state.gems < 8 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
+    ui.buyCake.disabled = state.gems < 9 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
+    ui.buyUmbrella.disabled = state.gems < 14 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
     ui.buyUmbrella.title = nearShop ? '购买保护伞' : '靠近矿井补给站后购买';
     ui.buyCake.title = nearShop ? '购买蛋糕' : '靠近矿井补给站后购买';
     ui.buyWall.title = nearShop ? '购买防护墙体' : '靠近矿井补给站后购买';
   }
 
-  function renderInventory() {
-    ui.inventorySlots.forEach((slot, index) => {
-      const itemType = state.inventory[index];
+  function renderInventory(slots, inventory, owner) {
+    slots.forEach((slot, index) => {
+      const itemType = inventory[index];
       const filled = Boolean(itemType);
       slot.classList.toggle('filled', filled);
       const oldItem = slot.querySelector('.slot-cannon');
@@ -856,7 +1045,8 @@
         if (itemType === 'umbrella') item.setAttribute('aria-label', '保护伞');
         slot.appendChild(item);
       }
-      slot.title = filled ? `按 ${index + 1} 使用${itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : itemType === 'cannon' ? '大炮' : itemType === 'cake' ? '蛋糕' : itemType === 'umbrella' ? '保护伞' : '探照灯头盔'}` : `物品栏 ${index + 1}`;
+      const itemName = itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : itemType === 'cannon' ? '大炮' : itemType === 'cake' ? '蛋糕' : itemType === 'umbrella' ? '保护伞' : '探照灯头盔';
+      slot.title = filled ? `${owner === 'P2' ? '点击' : `按 ${index + 1} 或点击`}使用${itemName}` : `${owner} 物品栏 ${index + 1}`;
     });
   }
 
@@ -892,14 +1082,23 @@
     ui.shop.style.top = `${clamp(selected.top, 8, maxTop)}px`;
   }
 
-  function findNearestCannon() {
-    if (state.player.cannon) return null;
-    return state.cannons.find(c => distance(c, state.player) < 57) || null;
+  function findNearestCannon(player = state.player) {
+    if (player.cannon) return null;
+    return state.cannons.find(c => !c.destroyed && distance(c, player) < 57) || null;
   }
 
   function isNearShop() {
     return distance(state.player, { x: shopZone.x + shopZone.w / 2, y: shopZone.y + shopZone.h / 2 }) < 250;
   }
+
+  function getShopCustomer() {
+    const shop = { x: shopZone.x + shopZone.w / 2, y: shopZone.y + shopZone.h / 2 };
+    const candidates = getActivePlayers().filter(player => distance(player, shop) < 250);
+    if (!candidates.length) return null;
+    return candidates.reduce((nearest, player) => distance(player, shop) < distance(nearest, shop) ? player : nearest);
+  }
+
+  function inventoryFor(player) { return player === state.player2 ? state.inventory2 : state.inventory; }
 
   function isNearGemMine() {
     return distance(state.player, state.gemMine) < 170;
@@ -941,7 +1140,133 @@
     for (const bullet of state.bullets) drawBullet(bullet);
     for (const rock of state.fallingRocks) drawFallingRock(rock);
     drawPlayer(state.player);
+    if (isTwoPlayer()) drawPlayer(state.player2);
+    drawRescueEffect();
     for (const particle of state.particles) drawParticle(particle);
+    ctx.restore();
+    drawWeatherOverlay();
+  }
+
+  function drawRescueEffect() {
+    const rescue = state.rescue;
+    if (!rescue.rescuer || !rescue.target) return;
+    const from = rescue.rescuer;
+    const to = rescue.target;
+    const pulse = .5 + Math.sin(state.time * 10) * .2;
+    ctx.save();
+    ctx.strokeStyle = `rgba(111, 245, 220, ${.45 + pulse * .35})`;
+    ctx.lineWidth = 4;
+    ctx.setLineDash([10, 8]);
+    ctx.lineDashOffset = -state.time * 65;
+    ctx.beginPath(); ctx.moveTo(from.x, from.y - 8); ctx.lineTo(to.x, to.y - 8); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const player of [from, to]) {
+      ctx.strokeStyle = `rgba(255, 224, 122, ${.45 + pulse * .4})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(player.x, player.y - 8, 25 + Math.sin(state.time * 7) * 4, 0, TAU); ctx.stroke();
+    }
+    ctx.fillStyle = '#fff0a6';
+    ctx.font = '900 11px Nunito';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.max(0, 4 - rescue.progress).toFixed(1)}s`, to.x, to.y - 38);
+    ctx.restore();
+  }
+
+  function drawWeatherOverlay() {
+    if (!state.weather) return;
+    ctx.save();
+    const w = innerWidth;
+    const h = innerHeight;
+    const t = state.time;
+    if (state.weather === 'sandstorm') {
+      const visibilityRadius = Math.min(260, Math.max(150, Math.min(w, h) * .2));
+      const visiblePlayers = getPlayers().filter(p => !p.downed);
+      if (!weatherCanvas) {
+        weatherCanvas = document.createElement('canvas');
+        weatherCtx = weatherCanvas.getContext('2d');
+      }
+      if (weatherCanvas.width !== canvas.width || weatherCanvas.height !== canvas.height) {
+        weatherCanvas.width = canvas.width;
+        weatherCanvas.height = canvas.height;
+      }
+      weatherCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      weatherCtx.clearRect(0, 0, w, h);
+      weatherCtx.fillStyle = 'rgba(28, 19, 15, 1)';
+      weatherCtx.fillRect(0, 0, w, h);
+      weatherCtx.save();
+      weatherCtx.globalCompositeOperation = 'destination-out';
+      for (const player of visiblePlayers) {
+        const playerX = player.x - world.cameraX;
+        const playerY = player.y - world.cameraY;
+        const clear = weatherCtx.createRadialGradient(playerX, playerY, 0, playerX, playerY, visibilityRadius);
+        clear.addColorStop(0, 'rgba(0, 0, 0, .98)');
+        clear.addColorStop(.5, 'rgba(0, 0, 0, .88)');
+        clear.addColorStop(.8, 'rgba(0, 0, 0, .4)');
+        clear.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        weatherCtx.fillStyle = clear;
+        weatherCtx.beginPath();
+        weatherCtx.arc(playerX, playerY, visibilityRadius, 0, TAU);
+        weatherCtx.fill();
+      }
+      weatherCtx.restore();
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 222, 157, .28)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 74; i++) {
+        const y = ((i * 31 + t * (145 + (i % 7) * 24)) % (h + 50)) - 25;
+        const x = ((i * 73 + t * (85 + i % 5 * 17)) % (w + 230)) - 115;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 85 + (i % 5) * 28, y - 12); ctx.stroke();
+      }
+      ctx.restore();
+      ctx.drawImage(weatherCanvas, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = 'rgba(44, 124, 143, .18)';
+      ctx.fillRect(0, 0, w, h);
+      const cx = state.weatherCenter.x - world.cameraX;
+      const cy = state.weatherCenter.y - world.cameraY;
+      ctx.translate(cx, cy);
+      ctx.rotate(t * .8);
+      for (let i = 0; i < 7; i++) {
+        ctx.save();
+        ctx.rotate(i * Math.PI / 2);
+        ctx.strokeStyle = `rgba(177, 247, 239, ${.4 - i * .035})`;
+        ctx.lineWidth = 25 - i * 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 90 + i * 52, -.98, .98);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.rotate(-t * 1.7);
+      ctx.strokeStyle = 'rgba(226, 255, 240, .62)';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 54; i++) {
+        const angle = i / 54 * TAU;
+        const radius = 105 + (i % 7) * 35;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        ctx.lineTo(Math.cos(angle + .28) * (radius + 64), Math.sin(angle + .28) * (radius + 64));
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.fillStyle = 'rgba(105, 190, 199, .2)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.translate(cx, cy);
+      ctx.rotate(t * 2.6);
+      for (let i = 0; i < 7; i++) {
+        const y = -92 + i * 25;
+        const halfWidth = 15 + i * 8;
+        ctx.strokeStyle = `rgba(219, 255, 247, ${.72 - i * .065})`;
+        ctx.lineWidth = 7 - i * .45;
+        ctx.beginPath();
+        ctx.ellipse(0, y, halfWidth, 6 + i * .65, 0, .18, Math.PI - .18);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(15, 58, 71, .85)';
+      ctx.beginPath(); ctx.ellipse(0, 75, 43, 13, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(206, 255, 243, .8)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(0, 75, 43, 13, 0, 0, TAU); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1066,6 +1391,21 @@
   }
 
   function drawDebris(debris) {
+    if (debris.kind === 'helmet') {
+      ctx.save();
+      ctx.translate(debris.x, debris.y);
+      ctx.rotate(debris.rotation);
+      ctx.fillStyle = 'rgba(8, 16, 20, .34)';
+      ctx.beginPath(); ctx.ellipse(0, 12, 20, 6, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#b38a40';
+      ctx.beginPath(); ctx.arc(0, 0, 15, Math.PI, TAU); ctx.lineTo(15, 2); ctx.lineTo(-15, 2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#493b2d'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = '#3f302a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-11, -9); ctx.lineTo(-1, 1); ctx.lineTo(8, -10); ctx.stroke();
+      ctx.fillStyle = '#66777a'; ctx.fillRect(5, -2, 12, 5);
+      ctx.restore();
+      return;
+    }
     if (debris.kind === 'rock') {
       drawRockDebris(debris);
       return;
@@ -1214,7 +1554,7 @@
   function drawCannon(c) {
     ctx.save();
     ctx.translate(c.x, c.y);
-    const active = state.player.cannon === c;
+    const active = getPlayers().some(player => player.cannon === c);
     if (active) {
       ctx.strokeStyle = 'rgba(91, 248, 218, .7)';
       ctx.lineWidth = 2;
@@ -1340,6 +1680,20 @@
     ctx.fillStyle = '#6f9f61'; ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill();
     ctx.fillStyle = '#a8d982'; ctx.beginPath(); ctx.arc(-6, -4, 5, 0, TAU); ctx.arc(7, -4, 5, 0, TAU); ctx.fill();
     ctx.fillStyle = '#1a2329'; ctx.beginPath(); ctx.arc(-5, -4, 2, 0, TAU); ctx.arc(8, -4, 2, 0, TAU); ctx.fill();
+    if (monster.minerHelmet) {
+      ctx.fillStyle = '#e7bd5e';
+      ctx.beginPath(); ctx.arc(0, -12, 19, Math.PI, TAU); ctx.lineTo(19, -10); ctx.lineTo(-19, -10); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#493b2d'; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.fillStyle = '#81999a'; ctx.fillRect(-16, -13, 32, 5);
+      ctx.save();
+      ctx.translate(13, -14);
+      ctx.rotate(monster.angle || 0);
+      ctx.fillStyle = '#fff0a1'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#253943'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 240, 161, .16)';
+      ctx.beginPath(); ctx.moveTo(5, -4); ctx.lineTo(66, -22); ctx.lineTo(66, 22); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
     ctx.save();
     ctx.translate(9, 8);
     ctx.rotate(monster.angle || 0);
@@ -1355,6 +1709,16 @@
 
   function drawPlayer(p) {
     ctx.save(); ctx.translate(p.x, p.y);
+    if (p.downed) {
+      ctx.rotate(.22);
+      ctx.fillStyle = 'rgba(8, 14, 18, .45)'; ctx.beginPath(); ctx.ellipse(0, 13, 23, 8, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = p === state.player ? '#a85a65' : '#587da6'; ctx.fillRect(-21, -2, 42, 15);
+      ctx.fillStyle = '#d7c9bf'; ctx.beginPath(); ctx.arc(-17, -8, 12, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#fff0c8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-5, -25); ctx.lineTo(-5, -39); ctx.moveTo(-12, -32); ctx.lineTo(2, -32); ctx.stroke();
+      ctx.fillStyle = '#fff0c8'; ctx.font = '900 10px Nunito'; ctx.textAlign = 'center'; ctx.fillText(p === state.player ? 'P1' : 'P2', 0, -46);
+      ctx.restore();
+      return;
+    }
     if (p.knockback > 0) {
       ctx.globalAlpha = .72 + Math.sin(state.time * 42) * .22;
       ctx.rotate(p.hitRotation);
@@ -1368,6 +1732,13 @@
       : p.skin === 'mint'
         ? { body: '#5f9e9c', fur: '#a4e4d3', ear: '#8fd1c3', innerEar: '#5a9d94', tail: '#477f83', nose: '#d9849a' }
         : { body: '#d8747d', fur: '#f5c7a2', ear: '#eebc9d', innerEar: '#ad6e65', tail: '#a55c61', nose: '#f29b9b' };
+    const moving = !p.cannon && p.stun <= 0 && (p === state.player
+      ? keys.has('KeyW') || keys.has('KeyA') || keys.has('KeyS') || keys.has('KeyD')
+      : keys.has('ArrowUp') || keys.has('ArrowLeft') || keys.has('ArrowDown') || keys.has('ArrowRight'));
+    const runPhase = state.time * (p.speedBuff > 0 ? 19 : 13) + (p === state.player2 ? Math.PI : 0);
+    const stride = moving ? Math.sin(runPhase) : 0;
+    const bob = moving ? Math.abs(Math.cos(runPhase)) * 2 : 0;
+    ctx.translate(0, -bob);
     if (p.helmet) {
       ctx.save();
       ctx.rotate(p.facing || 0);
@@ -1380,7 +1751,9 @@
       ctx.fill();
       ctx.restore();
     }
-    ctx.fillStyle = 'rgba(8, 14, 18, .32)'; ctx.beginPath(); ctx.ellipse(0, 15, 16, 6, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(8, 14, 18, .32)'; ctx.beginPath(); ctx.ellipse(0, 15 + bob, 16, 6, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = palette.body; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-5, 14); ctx.lineTo(-7 + stride * 5, 22); ctx.moveTo(5, 14); ctx.lineTo(7 - stride * 5, 22); ctx.stroke();
     ctx.fillStyle = palette.body; ctx.fillRect(-10, -1, 20, 18);
     ctx.fillStyle = palette.fur; ctx.beginPath(); ctx.arc(0, -10, 14, 0, TAU); ctx.fill();
     ctx.fillStyle = palette.ear; ctx.beginPath(); ctx.moveTo(-12, -18); ctx.lineTo(-12, -31); ctx.lineTo(-3, -22); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(12, -18); ctx.lineTo(12, -31); ctx.lineTo(3, -22); ctx.closePath(); ctx.fill();
@@ -1393,7 +1766,11 @@
     }
     ctx.fillStyle = '#2f3c43'; ctx.beginPath(); ctx.arc(-5, -10, 2.1, 0, TAU); ctx.arc(5, -10, 2.1, 0, TAU); ctx.fill();
     ctx.fillStyle = palette.nose; ctx.beginPath(); ctx.arc(0, -5, 2.4, 0, TAU); ctx.fill();
-    ctx.strokeStyle = palette.tail; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 7); ctx.quadraticCurveTo(24, 2, 20, -10); ctx.stroke();
+    ctx.strokeStyle = palette.tail; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 7); ctx.quadraticCurveTo(24, 2 + stride * 5, 20 + stride * 4, -10); ctx.stroke();
+    if (isTwoPlayer()) {
+      ctx.fillStyle = p === state.player ? '#ffd866' : '#8cbcff';
+      ctx.font = '900 10px Nunito'; ctx.textAlign = 'center'; ctx.fillText(p === state.player ? 'P1' : 'P2', 0, -43);
+    }
     if (p.stun > 0) {
       ctx.fillStyle = '#ffe37b';
       for (const [x, y] of [[-13, -35], [0, -43], [13, -35]]) {
@@ -1476,12 +1853,31 @@
   function drawParticle(p) { ctx.globalAlpha = p.life / p.maxLife; ctx.fillStyle = p.color; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); ctx.globalAlpha = 1; }
 
   function startGame() {
+    gameMode = 'single';
+    startGameMode();
+  }
+
+  function startCoopGame() {
+    gameMode = 'coop';
+    startGameMode();
+  }
+
+  function restartGame() {
+    if (isTwoPlayer()) startCoopGame();
+    else startGame();
+  }
+
+  function startGameMode() {
     started = true;
     paused = false;
     gameOver = false;
     ui.start.hidden = true;
     ui.pause.hidden = true;
     ui.gameOver.hidden = true;
+    ui.tutorialReturnPause.hidden = true;
+    ui.tutorialMainMenu.hidden = false;
+    document.querySelector('.game-shell').classList.toggle('coop-mode', isTwoPlayer());
+    ui.pause.classList.toggle('coop-mode', isTwoPlayer());
     ui.shop.hidden = false;
     resetGame();
     startMusic();
@@ -1527,6 +1923,8 @@
     ui.menuPages.hidden = true;
     ui.skinPage.hidden = true;
     ui.tutorialPage.hidden = true;
+    ui.tutorialReturnPause.hidden = true;
+    ui.tutorialMainMenu.hidden = false;
     ui.settingsPage.hidden = true;
     updateSkinSelection();
     updateSettingsLabel();
@@ -1556,35 +1954,43 @@
   }
 
   function toggleCannon() {
-    if (state.player.stun > 0) return;
+    if (state.player.stun > 0 || state.player.downed) return;
     if (state.player.cannon) { state.player.cannon = null; return; }
     const nearest = findNearestCannon();
-    if (nearest) { state.player.cannon = nearest; showToast('炮台已接管'); }
+    if (nearest) { claimCannon(state.player, nearest); showToast('P1 已接管炮台'); }
+  }
+
+  function claimCannon(player, cannon) {
+    for (const other of getPlayers()) other.cannon = null;
+    player.cannon = cannon;
   }
 
   function buyCannon() {
-    const slot = state.inventory.findIndex(item => !item);
+    const buyer = getShopCustomer();
+    const inventory = buyer && inventoryFor(buyer);
+    const slot = inventory ? inventory.findIndex(item => !item) : -1;
     if (slot < 0) { showToast('物品栏已满'); return; }
-    if (!isNearShop()) { showToast('请靠近矿井补给站'); return; }
+    if (!buyer) { showToast('请靠近矿井补给站'); return; }
     if (state.gems < 12) { showToast('宝石不够，去炸宝石车厢！'); return; }
     state.gems -= 12;
     playSfx('buy');
-    state.inventory[slot] = 'cannon';
-    state.cannonInventory++;
-    showToast('补给完成，按 Q 放置大炮');
+    inventory[slot] = 'cannon';
+    showToast('补给完成，点击物品栏中的大炮即可放置');
     syncUI();
   }
 
   function buyHelmet() {
-    const slot = state.inventory.findIndex(item => !item);
+    const buyer = getShopCustomer();
+    const inventory = buyer && inventoryFor(buyer);
+    const slot = inventory ? inventory.findIndex(item => !item) : -1;
     if (slot < 0) { showToast('物品栏已满'); return; }
-    if (!isNearShop()) { showToast('请靠近矿井补给站'); return; }
-    if (state.player.helmet) { showToast('探照灯头盔已经佩戴'); return; }
+    if (!buyer) { showToast('请靠近矿井补给站'); return; }
+    if (buyer.helmet) { showToast('探照灯头盔已经佩戴'); return; }
     if (state.gems < 18) { showToast('宝石不够，先去收集更多宝石！'); return; }
     state.gems -= 18;
     playSfx('buy');
-    state.inventory[slot] = 'helmet';
-    state.player.helmet = true;
+    inventory[slot] = 'helmet';
+    buyer.helmet = true;
     showToast('探照灯头盔已佩戴，受击伤害降至 10');
     syncUI();
   }
@@ -1606,48 +2012,50 @@
   }
 
   function buyInventoryItem(type, cost, message) {
-    const slot = state.inventory.findIndex(item => !item);
+    const buyer = getShopCustomer();
+    const inventory = buyer && inventoryFor(buyer);
+    const slot = inventory ? inventory.findIndex(item => !item) : -1;
     if (slot < 0) { showToast('物品栏已满'); return; }
-    if (!isNearShop()) { showToast('请靠近矿井补给站'); return; }
+    if (!buyer) { showToast('请靠近矿井补给站'); return; }
     if (state.gems < cost) { showToast('宝石不够，去炸宝石车厢！'); return; }
     state.gems -= cost;
     playSfx('buy');
-    state.inventory[slot] = type;
+    inventory[slot] = type;
     showToast(message);
     syncUI();
   }
 
-  function useInventorySlot(index) {
-    const item = state.inventory[index];
-    if (!item) return;
-    const p = state.player;
-    if (p.stun > 0) return;
+  function useInventorySlot(index, player = state.player) {
+    const inventory = inventoryFor(player);
+    const item = inventory[index];
+    if (!item || player.stun > 0 || player.downed) return;
     if (item === 'cannon') {
-      deployInventoryCannon(index);
+      deployInventoryCannon(index, player);
       syncUI();
       return;
-    } else if (item === 'fish') {
-      if (p.health >= p.maxHealth) { showToast('生命值已满'); return; }
-      p.health = Math.min(p.maxHealth, p.health + 20);
+    }
+    if (item === 'fish') {
+      if (player.health >= player.maxHealth) { showToast('生命值已满'); return; }
+      player.health = Math.min(player.maxHealth, player.health + 20);
       playSfx('heal');
-      state.inventory[index] = null;
-      emit(p.x, p.y, '#ffc976', 12, 95);
+      inventory[index] = null;
+      emit(player.x, player.y, '#ffc976', 12, 95);
       showToast('吃下鱼罐头，恢复 20 生命');
     } else if (item === 'wall') {
-      if (p.cannon) { showToast('离开炮台后再部署墙体'); return; }
-      placeWall(p.x + Math.cos(p.facing) * 52, p.y + Math.sin(p.facing) * 52);
-      state.inventory[index] = null;
+      if (player.cannon) { showToast('离开炮台后再部署墙体'); return; }
+      placeWall(player.x + Math.cos(player.facing) * 52, player.y + Math.sin(player.facing) * 52);
+      inventory[index] = null;
       showToast('防护墙体已部署');
     } else if (item === 'umbrella') {
-      if (p.cannon) { showToast('离开炮台后再部署保护伞'); return; }
-      placeUmbrella(p.x + Math.cos(p.facing) * 48, p.y + Math.sin(p.facing) * 48);
-      state.inventory[index] = null;
+      if (player.cannon) { showToast('离开炮台后再部署保护伞'); return; }
+      placeUmbrella(player.x + Math.cos(player.facing) * 48, player.y + Math.sin(player.facing) * 48);
+      inventory[index] = null;
       showToast('保护伞已撑起，可拦截 3 次落石');
     } else if (item === 'cake') {
-      p.speedBuff += 10;
+      player.speedBuff += 10;
       playSfx('heal');
-      state.inventory[index] = null;
-      emit(p.x, p.y, '#ffcf75', 14, 110);
+      inventory[index] = null;
+      emit(player.x, player.y, '#ffcf75', 14, 110);
       showToast('吃下蛋糕，移速翻倍 10 秒');
     } else if (item === 'helmet') {
       showToast('探照灯头盔已经佩戴');
@@ -1656,34 +2064,53 @@
     syncUI();
   }
 
-  function deployInventoryCannon(index) {
-    const p = state.player;
-    if (p.cannon) p.cannon = null;
-    placeCannon(p.x + Math.cos(p.facing) * 40, p.y + Math.sin(p.facing) * 40);
-    state.cannonInventory = Math.max(0, state.cannonInventory - 1);
-    state.inventory[index] = null;
+  function deployInventoryCannon(index, player = state.player) {
+    const inventory = inventoryFor(player);
+    if (player.cannon) player.cannon = null;
+    placeCannon(player.x + Math.cos(player.facing) * 40, player.y + Math.sin(player.facing) * 40);
+    inventory[index] = null;
     showToast('大炮已部署');
   }
 
-  function placeFirstCannon() {
-    const slot = state.inventory.findIndex(item => item === 'cannon');
-    if (slot >= 0) useInventorySlot(slot);
+  function rescueWithKey(player, key) {
+    if (!isTwoPlayer() || player.downed) return;
+    const target = player === state.player ? state.player2 : state.player;
+    if ((key === 'KeyQ' && player === state.player) || (key === 'KeyN' && player === state.player2)) {
+      if (target.downed && distance(player, target) <= 78) {
+        state.rescue = { rescuer: player, target, progress: 0 };
+        showToast('正在救援，请持续按住 4 秒');
+      }
+    }
   }
 
   window.addEventListener('keydown', event => {
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(event.code)) event.preventDefault();
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyE', 'KeyM', 'KeyQ', 'KeyN', 'KeyP', 'KeyO', 'Escape'].includes(event.code)) event.preventDefault();
     keys.add(event.code);
     if (!started || gameOver) return;
     if (event.code === 'Escape' && !event.repeat) {
+      if (!ui.tutorialPage.hidden && !ui.tutorialReturnPause.hidden) {
+        ui.tutorialReturnPause.hidden = true;
+        ui.tutorialPage.hidden = true;
+        ui.menuPages.hidden = true;
+        ui.start.hidden = true;
+        ui.pause.hidden = false;
+        return;
+      }
       paused = !paused;
       ui.pause.hidden = !paused;
       if (!paused) last = performance.now();
     }
     if (paused || event.repeat) return;
     if (event.code === 'KeyE') toggleCannon();
-    if (event.code === 'KeyQ' && !state.player.stun && !state.player.cannon && state.cannonInventory) {
-      placeFirstCannon();
+    if (event.code === 'KeyQ' && !event.repeat) rescueWithKey(state.player, 'KeyQ');
+    if (event.code === 'KeyM' && !event.repeat && isTwoPlayer() && !state.player2.downed) {
+      if (state.player2.cannon) state.player2.cannon = null;
+      else {
+        const nearest = findNearestCannon(state.player2);
+        if (nearest) { claimCannon(state.player2, nearest); showToast('P2 已接管炮台'); }
+      }
     }
+    if (event.code === 'KeyN' && !event.repeat && isTwoPlayer()) rescueWithKey(state.player2, 'KeyN');
     if (event.code === 'KeyP' && !event.repeat) {
       const now = performance.now();
       testGemPresses = testGemPresses.filter(timestamp => now - timestamp <= 3000);
@@ -1694,7 +2121,15 @@
         showToast('测试：获得 100 个宝石');
       }
     }
-    if (event.code.startsWith('Digit')) useInventorySlot(Number(event.code.slice(-1)) - 1);
+    if (event.code === 'KeyO' && !event.repeat) {
+      const now = performance.now();
+      testWeatherPresses = testWeatherPresses.filter(timestamp => now - timestamp <= 3000);
+      testWeatherPresses.push(now);
+      if (testWeatherPresses.length >= 5) {
+        testWeatherPresses = [];
+        summonTestWeather();
+      }
+    }
   });
   window.addEventListener('keyup', event => keys.delete(event.code));
   canvas.addEventListener('mousemove', event => { const box = canvas.getBoundingClientRect(); mouse.x = event.clientX - box.left; mouse.y = event.clientY - box.top; });
@@ -1702,19 +2137,25 @@
     if (event.button !== 0) return;
     mouse.down = true;
     if (started && !paused && !gameOver) {
+      if (state.player.downed) return;
       const target = screenToWorld(mouse.x, mouse.y);
       if (!state.player.cannon && !state.gemMine.repaired && distance(target, state.gemMine) < 120) {
         repairGemMine();
         return;
       }
-      if (state.player.cannon) fireShell(state.player.cannon);
+      const controlledCannon = getPlayers().find(player => player.cannon)?.cannon;
+      if (controlledCannon) fireShell(controlledCannon);
     }
   });
   window.addEventListener('mouseup', () => { mouse.down = false; });
   canvas.addEventListener('contextmenu', event => event.preventDefault());
-  ui.inventorySlots.forEach((slot, index) => slot.addEventListener('click', event => {
+  ui.p1InventorySlots.forEach((slot, index) => slot.addEventListener('click', event => {
     event.preventDefault();
     if (started && !paused && !gameOver) useInventorySlot(index);
+  }));
+  ui.p2InventorySlots.forEach((slot, index) => slot.addEventListener('click', event => {
+    event.preventDefault();
+    if (started && !paused && !gameOver && isTwoPlayer()) useInventorySlot(index, state.player2);
   }));
   ui.buy.addEventListener('click', buyCannon);
   ui.buyHelmet.addEventListener('click', buyHelmet);
@@ -1723,11 +2164,36 @@
   ui.buyCake.addEventListener('click', buyCake);
   ui.buyUmbrella.addEventListener('click', buyUmbrella);
   ui.resume.addEventListener('click', () => { paused = false; ui.pause.hidden = true; last = performance.now(); });
+  ui.pauseTutorial.addEventListener('click', () => {
+    ui.pause.hidden = true;
+    ui.start.hidden = false;
+    ui.mainMenu.hidden = true;
+    ui.menuPages.hidden = false;
+    ui.skinPage.hidden = true;
+    ui.tutorialPage.hidden = false;
+    ui.settingsPage.hidden = true;
+    ui.tutorialReturnPause.hidden = false;
+    ui.tutorialMainMenu.hidden = true;
+  });
+  ui.tutorialReturnPause.addEventListener('click', () => {
+    ui.tutorialReturnPause.hidden = true;
+    ui.tutorialPage.hidden = true;
+    ui.menuPages.hidden = true;
+    ui.start.hidden = true;
+    ui.pause.hidden = false;
+  });
   ui.pauseMenu.addEventListener('click', returnToMenu);
   ui.menuStart.addEventListener('click', startGame);
+  ui.menuTwoPlayer.addEventListener('click', startCoopGame);
   ui.menuSkins.addEventListener('click', () => showMenuPage('skins'));
   ui.menuTutorial.addEventListener('click', () => showMenuPage('tutorial'));
   ui.menuSettings.addEventListener('click', () => showMenuPage('settings'));
+  ui.supportCreator.addEventListener('click', () => { ui.supportModal.hidden = false; });
+  ui.supportClose.addEventListener('click', () => { ui.supportModal.hidden = true; });
+  ui.supportModal.addEventListener('click', event => { if (event.target === ui.supportModal) ui.supportModal.hidden = true; });
+  window.addEventListener('keydown', event => {
+    if (event.code === 'Escape' && !ui.supportModal.hidden) ui.supportModal.hidden = true;
+  });
   ui.menuBacks.forEach(button => button.addEventListener('click', showMainMenu));
   ui.skinButtons.forEach(button => button.addEventListener('click', () => selectSkin(button.dataset.skin)));
   ui.toggleShake.addEventListener('click', () => {
@@ -1746,7 +2212,7 @@
     if (audio.sfxEnabled) { ensureAudio(); playSfx('buy'); }
     updateSettingsLabel();
   });
-  ui.restart.addEventListener('click', startGame);
+  ui.restart.addEventListener('click', restartGame);
   ui.gameOverMenu.addEventListener('click', returnToMenu);
   window.addEventListener('resize', resize);
 
