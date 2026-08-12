@@ -70,6 +70,7 @@
     particles: [],
     trains: [],
     trainTimer: 2,
+    verticalTrainTimer: 0,
     trainRound: 0,
     fallingRocks: [],
     gemMine: { x: 175, y: 0, repaired: false, productionTimer: 3 },
@@ -90,6 +91,7 @@
   const world = { w: 1800 * MAP_SCALE, h: 1100 * MAP_SCALE, cameraX: 0, cameraY: 0 };
   const rail = { bandTop: 350 * MAP_SCALE, bandHeight: 112 * MAP_SCALE, upper: 370 * MAP_SCALE, lower: 440 * MAP_SCALE, center: 405 * MAP_SCALE };
   const shopZone = { x: 1510 * MAP_SCALE, y: 860 * MAP_SCALE, w: 220 * MAP_SCALE, h: 155 * MAP_SCALE };
+  const verticalRail = { x: shopZone.x - 112, width: 98 };
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -122,6 +124,7 @@
     state.particles = [];
     state.trains = [];
     state.trainTimer = 2;
+    state.verticalTrainTimer = 0;
     state.trainRound = 0;
     state.fallingRocks = [];
     state.gemMine = { x: 175, y: world.h - 180, repaired: false, productionTimer: 3 };
@@ -196,6 +199,12 @@
     return { cooldown: 1.8, flash: 0, angle: Math.PI, weapon: randomMonsterWeapon() };
   }
 
+  function trainCarPosition(train, car) {
+    return train.vertical
+      ? { x: train.x, y: train.y + car.offset }
+      : { x: train.x + car.offset, y: train.y };
+  }
+
   function spawnTrain() {
     const hasGemCar = Math.random() > .18;
     state.trainRound++;
@@ -205,6 +214,16 @@
     train.cars.push({ offset: -180, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
     state.trains.push(train);
     showToast('火车驶入矿井！');
+  }
+
+  function spawnVerticalTrain() {
+    const hasGemCar = Math.random() > .18;
+    const train = { x: verticalRail.x, y: -300, round: Math.max(2, state.trainRound), speed: TRAIN_BASE_SPEED, vertical: true, destroyed: false, cars: [] };
+    train.cars.push({ offset: 0, type: 'engine', hp: 2, radius: 40, destroyed: false, monster: createMonster() });
+    train.cars.push({ offset: -96, type: hasGemCar ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
+    train.cars.push({ offset: -180, type: Math.random() > .5 ? 'gem' : 'coal', hp: 1, radius: 34, destroyed: false });
+    state.trains.push(train);
+    showToast('纵向火车驶入补给站铁轨！');
   }
 
   function fireShell(cannon) {
@@ -221,7 +240,8 @@
 
   function fireMonster(train, engineCar) {
     const monster = engineCar.monster;
-    const engine = { x: train.x + engineCar.offset, y: train.y - 17 };
+    const enginePosition = trainCarPosition(train, engineCar);
+    const engine = train.vertical ? { x: enginePosition.x + 17, y: enginePosition.y } : { x: enginePosition.x, y: enginePosition.y - 17 };
     const dx = state.player.x - engine.x;
     const dy = state.player.y - engine.y;
     const base = monster.angle;
@@ -279,7 +299,7 @@
       for (const car of train.cars) {
         if (car.destroyed) continue;
         if (car.type === 'engine') continue;
-        const pos = { x: train.x + car.offset, y: train.y };
+        const pos = trainCarPosition(train, car);
         if (Math.hypot(pos.x - x, pos.y - y) < radius + car.radius) destroyCar(train, car, pos);
       }
     }
@@ -438,7 +458,7 @@
     for (const train of state.trains) {
       for (const car of train.cars) {
         if (car.destroyed || car.type === 'engine') continue;
-        const position = { x: train.x + car.offset, y: train.y, radius: car.radius };
+        const position = { ...trainCarPosition(train, car), radius: car.radius };
         if (circleHit(impact, position, 1)) destroyCar(train, car, position);
       }
     }
@@ -524,30 +544,42 @@
       spawnTrain();
       state.trainTimer = rand(15, 21);
     }
+    if (state.time >= 180) {
+      state.verticalTrainTimer -= dt;
+      if (state.verticalTrainTimer <= 0) {
+        spawnVerticalTrain();
+        state.verticalTrainTimer = rand(18, 25);
+      }
+    }
     for (const train of state.trains) {
       if (!train.destroyed) {
         train.speed = TRAIN_BASE_SPEED * trainSpeedMultiplier();
-        train.x += train.speed * dt;
+        if (train.vertical) train.y += train.speed * dt;
+        else train.x += train.speed * dt;
         resolveTrainCollisions(train);
         for (const car of train.cars) {
           if (car.type !== 'engine' || car.destroyed) continue;
           const monster = car.monster;
-          const engineX = train.x + car.offset;
-          monster.angle = Math.atan2(state.player.y - (train.y - 17), state.player.x - engineX);
+          const enginePosition = trainCarPosition(train, car);
+          const muzzle = train.vertical ? { x: enginePosition.x + 17, y: enginePosition.y } : { x: enginePosition.x, y: enginePosition.y - 17 };
+          monster.angle = Math.atan2(state.player.y - muzzle.y, state.player.x - muzzle.x);
           monster.cooldown -= dt;
           monster.flash = Math.max(0, monster.flash - dt);
-          if (monster.cooldown <= 0 && engineX > 0 && engineX < world.w + 80) fireMonster(train, car);
+          const inMap = train.vertical ? muzzle.y > 0 && muzzle.y < world.h + 80 : muzzle.x > 0 && muzzle.x < world.w + 80;
+          if (monster.cooldown <= 0 && inMap) fireMonster(train, car);
         }
       }
     }
-    state.trains = state.trains.filter(train => train.x < world.w + 340 && (!train.destroyed || train.x < world.w + 150));
+    state.trains = state.trains.filter(train => train.vertical
+      ? train.y < world.h + 340
+      : train.x < world.w + 340 && (!train.destroyed || train.x < world.w + 150));
   }
 
   function resolveTrainCollisions(train) {
     const p = state.player;
     for (const car of train.cars) {
       if (car.destroyed) continue;
-      const carPosition = { x: train.x + car.offset, y: train.y, radius: car.radius };
+      const carPosition = { ...trainCarPosition(train, car), radius: car.radius };
       const dx = p.x - carPosition.x;
       const dy = p.y - carPosition.y;
       const minDistance = p.radius + car.radius;
@@ -558,12 +590,12 @@
       const safeDistance = Math.max(distanceToCar, .001);
       let pushX = dx / safeDistance;
       let pushY = dy / safeDistance;
-      const engineFrontHit = car.type === 'engine'
-        && dx > car.radius * .35
-        && Math.abs(dy) < car.radius * .78;
+      const engineFrontHit = car.type === 'engine' && (train.vertical
+        ? dy > car.radius * .35 && Math.abs(dx) < car.radius * .78
+        : dx > car.radius * .35 && Math.abs(dy) < car.radius * .78);
       if (engineFrontHit) {
-        pushX = -1;
-        pushY = p.y < rail.center ? -1.25 : 1.25;
+        pushX = train.vertical ? (p.x < verticalRail.x ? -1.25 : 1.25) : -1;
+        pushY = train.vertical ? -1 : (p.y < rail.center ? -1.25 : 1.25);
         const pushLength = Math.hypot(pushX, pushY);
         pushX /= pushLength;
         pushY /= pushLength;
@@ -602,7 +634,7 @@
       for (const train of state.trains) {
         for (const car of train.cars) {
           if (car.destroyed) continue;
-          const pos = { x: train.x + car.offset, y: train.y, radius: car.radius };
+          const pos = { ...trainCarPosition(train, car), radius: car.radius };
           if (circleHit(shell, pos, 4)) {
             explode(shell.x, shell.y);
             shell.life = 0;
@@ -942,6 +974,19 @@
     ctx.fillStyle = '#82959a';
     ctx.fillRect(-80, rail.upper - 3 * MAP_SCALE, world.w + 160, 7 * MAP_SCALE);
     ctx.fillRect(-80, rail.lower - 3 * MAP_SCALE, world.w + 160, 7 * MAP_SCALE);
+    ctx.save();
+    ctx.fillStyle = '#17222d';
+    ctx.fillRect(verticalRail.x - verticalRail.width / 2, -80, verticalRail.width, world.h + 160);
+    ctx.fillStyle = '#4a555b';
+    ctx.fillRect(verticalRail.x - 30, -80, 9, world.h + 160);
+    ctx.fillRect(verticalRail.x + 21, -80, 9, world.h + 160);
+    for (let y = -30; y < world.h + 50; y += 56) {
+      ctx.fillStyle = '#9d724c';
+      ctx.fillRect(verticalRail.x - 42, y, 84, 11);
+      ctx.fillStyle = 'rgba(19, 20, 21, .35)';
+      ctx.fillRect(verticalRail.x - 42, y + 8, 84, 3);
+    }
+    ctx.restore();
     ctx.fillStyle = '#0f1a22';
     ctx.fillRect(-80, rail.upper + 4 * MAP_SCALE, world.w + 160, 3 * MAP_SCALE);
     ctx.fillRect(-80, rail.lower + 4 * MAP_SCALE, world.w + 160, 3 * MAP_SCALE);
@@ -1212,10 +1257,20 @@
   function drawTrain(train) {
     for (const car of train.cars.slice().reverse()) {
       if (car.destroyed) continue;
-      const x = train.x + car.offset;
-      const y = train.y;
-      if (car.type === 'engine') drawEngine(x, y, car.monster);
-      else drawCar(x, y, car.type);
+      const position = trainCarPosition(train, car);
+      const x = position.x;
+      const y = position.y;
+      if (!train.vertical) {
+        if (car.type === 'engine') drawEngine(x, y, car.monster);
+        else drawCar(x, y, car.type);
+        continue;
+      }
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 2);
+      if (car.type === 'engine') drawEngine(0, 0, { ...car.monster, angle: car.monster.angle - Math.PI / 2 });
+      else drawCar(0, 0, car.type);
+      ctx.restore();
     }
   }
 
