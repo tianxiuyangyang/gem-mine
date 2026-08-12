@@ -34,6 +34,8 @@
     skinButtons: [...document.querySelectorAll('.skin-option')],
     menuBacks: [...document.querySelectorAll('[data-menu-back]')],
     toggleShake: document.querySelector('#toggle-shake'),
+    toggleMusic: document.querySelector('#toggle-music'),
+    toggleSfx: document.querySelector('#toggle-sfx'),
     gameOver: document.querySelector('#game-over'),
     restart: document.querySelector('#restart'),
     gameOverMenu: document.querySelector('#game-over-menu'),
@@ -49,6 +51,7 @@
   let gameOver = false;
   let toastTimer = 0;
   let testGemPresses = [];
+  const audio = { context: null, musicEnabled: true, sfxEnabled: true, musicTimer: 0, musicStep: 0 };
 
   const state = {
     gems: 0,
@@ -205,6 +208,7 @@
 
   function fireShell(cannon) {
     if (cannon.cooldown > 0) return;
+    playSfx('cannon');
     const target = screenToWorld(mouse.x, mouse.y);
     cannon.angle = Math.atan2(target.y - cannon.y, target.x - cannon.x);
     state.shells.push({ x: cannon.x + Math.cos(cannon.angle) * 36, y: cannon.y + Math.sin(cannon.angle) * 36, vx: Math.cos(cannon.angle) * 570, vy: Math.sin(cannon.angle) * 570, radius: 7, life: 2.3 });
@@ -221,18 +225,21 @@
     const dy = state.player.y - engine.y;
     const base = monster.angle;
     if (monster.weapon === 'splitter') {
+      playSfx('splitter');
       state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * SPLITTER_LARGE_SPEED, vy: Math.sin(base) * SPLITTER_LARGE_SPEED, radius: 16, type: 'splitter' });
       monster.cooldown = 1.8;
       monster.flash = .16;
       return;
     }
     if (monster.weapon === 'sniper') {
+      playSfx('sniper');
       state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 720, vy: Math.sin(base) * 720, radius: 8, type: 'sniper' });
       monster.cooldown = 2.05;
       monster.flash = .16;
       return;
     }
     const spreadCount = train.round >= 2 ? 5 : 3;
+    playSfx('shotgun');
     const spreadHalf = Math.floor(spreadCount / 2);
     for (let i = -spreadHalf; i <= spreadHalf; i++) {
       const angle = base + i * .16;
@@ -263,6 +270,7 @@
   }
 
   function explode(x, y, radius = 104) {
+    playSfx('blast');
     state.screenShake = state.reducedMotion ? 0 : 12;
     emit(x, y, '#ffe66d', 35, 260);
     emit(x, y, '#f06e59', 22, 190);
@@ -277,6 +285,7 @@
   }
 
   function destroyCar(train, car, pos) {
+    playSfx('blast');
     car.destroyed = true;
     emit(pos.x, pos.y, car.type === 'gem' ? '#48e0cf' : '#a3a3a2', 28, 210);
     if (car.type === 'gem') {
@@ -385,6 +394,7 @@
 
   function impactRock(rock) {
     rock.impacted = true;
+    playSfx('rock');
     const impact = { x: rock.x, y: rock.targetY, radius: rock.radius };
     const umbrella = state.umbrellas.find(candidate => !candidate.destroyed && circleHit(impact, candidate, 1));
     if (umbrella) {
@@ -428,6 +438,68 @@
       damageWall(wall);
     }
     state.umbrellas = state.umbrellas.filter(umbrella => !umbrella.destroyed);
+  }
+
+  function ensureAudio() {
+    if (!audio.context) audio.context = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.context.state === 'suspended') audio.context.resume();
+    return audio.context;
+  }
+
+  function tone(frequency, duration, options = {}) {
+    const context = ensureAudio();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const start = context.currentTime;
+    const volume = options.volume ?? .035;
+    oscillator.type = options.type ?? 'sine';
+    oscillator.frequency.setValueAtTime(frequency, start);
+    if (options.slide) oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, options.slide), start + duration);
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + .012);
+    gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration + .03);
+  }
+
+  function playSfx(name) {
+    if (!audio.sfxEnabled) return;
+    const sounds = {
+      cannon: () => { tone(120, .18, { type: 'sawtooth', volume: .07, slide: 52 }); tone(74, .24, { type: 'triangle', volume: .045, slide: 38 }); },
+      shotgun: () => tone(170, .09, { type: 'square', volume: .025, slide: 84 }),
+      splitter: () => { tone(260, .13, { type: 'triangle', volume: .035, slide: 120 }); tone(390, .1, { type: 'sine', volume: .02, slide: 190 }); },
+      sniper: () => tone(660, .12, { type: 'sawtooth', volume: .028, slide: 140 }),
+      blast: () => { tone(86, .3, { type: 'sawtooth', volume: .065, slide: 30 }); tone(46, .4, { type: 'triangle', volume: .04, slide: 24 }); },
+      gem: () => { tone(880, .12, { type: 'sine', volume: .04, slide: 1320 }); tone(1320, .18, { type: 'sine', volume: .025 }); },
+      hurt: () => tone(180, .22, { type: 'square', volume: .045, slide: 72 }),
+      rock: () => tone(62, .25, { type: 'triangle', volume: .055, slide: 34 }),
+      repair: () => { tone(392, .15, { type: 'sine', volume: .04, slide: 523 }); tone(523, .25, { type: 'sine', volume: .035, slide: 784 }); },
+      buy: () => { tone(440, .09, { type: 'triangle', volume: .03 }); tone(660, .13, { type: 'triangle', volume: .025 }); },
+      heal: () => tone(560, .2, { type: 'sine', volume: .035, slide: 840 }),
+    };
+    sounds[name]?.();
+  }
+
+  function playMusicStep() {
+    if (!audio.musicEnabled || !started || paused || gameOver) return;
+    const melody = [262, 330, 392, 523, 392, 330, 294, 349, 440, 587, 440, 349];
+    const bass = [131, 147, 165, 147];
+    const step = audio.musicStep++;
+    tone(melody[step % melody.length], .36, { type: 'triangle', volume: .018 });
+    if (step % 3 === 0) tone(bass[Math.floor(step / 3) % bass.length], .46, { type: 'sine', volume: .026 });
+  }
+
+  function startMusic() {
+    ensureAudio();
+    if (!audio.musicEnabled || audio.musicTimer) return;
+    playMusicStep();
+    audio.musicTimer = setInterval(playMusicStep, 420);
+  }
+
+  function stopMusic() {
+    if (audio.musicTimer) clearInterval(audio.musicTimer);
+    audio.musicTimer = 0;
   }
 
   function updateTrains(dt) {
@@ -523,6 +595,7 @@
         p.hitCooldown = .2;
         const damage = bullet.type === 'sniper' ? (p.helmet ? 10 : 45) : (p.helmet ? 10 : 30);
         p.health = Math.max(0, p.health - damage);
+        playSfx('hurt');
         emit(p.x, p.y, '#ff9075', 10, 120);
         state.screenShake = state.reducedMotion ? 0 : 6;
         showToast(p.helmet ? `头盔挡下了伤害（-${damage}）` : `受到散弹伤害（-${damage}）`);
@@ -538,6 +611,7 @@
     const damage = p.helmet ? helmetDamage : normalDamage;
     p.hitCooldown = .2;
     p.health = Math.max(0, p.health - damage);
+    playSfx('hurt');
     emit(p.x, p.y, '#ff9075', 10, 120);
     state.screenShake = state.reducedMotion ? 0 : 6;
     showToast(p.helmet ? `头盔挡下了 ${source}（-${damage}）` : `${source}（-${damage}）`);
@@ -574,6 +648,7 @@
       if (!gem.picked && distance(gem, p) < 33) {
         gem.picked = true;
         state.gems++;
+        playSfx('gem');
         emit(gem.x, gem.y, '#69f5df', 7, 95);
       }
     }
@@ -723,6 +798,7 @@
     state.gemMine.repaired = true;
     state.gemMine.productionTimer = 3;
     emit(state.gemMine.x, state.gemMine.y, '#69f5df', 22, 130);
+    playSfx('repair');
     showToast('宝石矿井修复完成，每 3 秒产出一颗宝石');
   }
 
@@ -1256,6 +1332,7 @@
     ui.gameOver.hidden = true;
     ui.shop.hidden = false;
     resetGame();
+    startMusic();
     last = performance.now();
   }
 
@@ -1267,6 +1344,7 @@
     ui.hint.classList.remove('visible');
     ui.shop.hidden = true;
     ui.gameOver.hidden = false;
+    stopMusic();
   }
 
   function returnToMenu() {
@@ -1275,6 +1353,7 @@
     gameOver = false;
     keys.clear();
     mouse.down = false;
+    stopMusic();
     ui.pause.hidden = true;
     ui.gameOver.hidden = true;
     ui.shop.hidden = true;
@@ -1312,6 +1391,8 @@
 
   function updateSettingsLabel() {
     ui.toggleShake.textContent = `画面震动：${state.reducedMotion ? '关闭' : '开启'}`;
+    ui.toggleMusic.textContent = `背景音乐：${audio.musicEnabled ? '开启' : '关闭'}`;
+    ui.toggleSfx.textContent = `游戏音效：${audio.sfxEnabled ? '开启' : '关闭'}`;
   }
 
   function gameLoop(time) {
@@ -1334,6 +1415,7 @@
     if (!isNearShop()) { showToast('请靠近矿井补给站'); return; }
     if (state.gems < 12) { showToast('宝石不够，去炸宝石车厢！'); return; }
     state.gems -= 12;
+    playSfx('buy');
     state.inventory[slot] = 'cannon';
     state.cannonInventory++;
     showToast('补给完成，按 Q 放置大炮');
@@ -1347,6 +1429,7 @@
     if (state.player.helmet) { showToast('探照灯头盔已经佩戴'); return; }
     if (state.gems < 18) { showToast('宝石不够，先去收集更多宝石！'); return; }
     state.gems -= 18;
+    playSfx('buy');
     state.inventory[slot] = 'helmet';
     state.player.helmet = true;
     showToast('探照灯头盔已佩戴，受击伤害降至 10');
@@ -1375,6 +1458,7 @@
     if (!isNearShop()) { showToast('请靠近矿井补给站'); return; }
     if (state.gems < cost) { showToast('宝石不够，去炸宝石车厢！'); return; }
     state.gems -= cost;
+    playSfx('buy');
     state.inventory[slot] = type;
     showToast(message);
     syncUI();
@@ -1391,6 +1475,7 @@
     } else if (item === 'fish') {
       if (p.health >= p.maxHealth) { showToast('生命值已满'); return; }
       p.health = Math.min(p.maxHealth, p.health + 20);
+      playSfx('heal');
       state.inventory[index] = null;
       emit(p.x, p.y, '#ffc976', 12, 95);
       showToast('吃下鱼罐头，恢复 20 生命');
@@ -1406,6 +1491,7 @@
       showToast('保护伞已撑起，可拦截 3 次落石');
     } else if (item === 'cake') {
       p.speedBuff += 10;
+      playSfx('heal');
       state.inventory[index] = null;
       emit(p.x, p.y, '#ffcf75', 14, 110);
       showToast('吃下蛋糕，移速翻倍 10 秒');
@@ -1492,6 +1578,17 @@
   ui.toggleShake.addEventListener('click', () => {
     state.reducedMotion = !state.reducedMotion;
     if (state.reducedMotion) state.screenShake = 0;
+    updateSettingsLabel();
+  });
+  ui.toggleMusic.addEventListener('click', () => {
+    audio.musicEnabled = !audio.musicEnabled;
+    if (audio.musicEnabled && started && !paused && !gameOver) startMusic();
+    else stopMusic();
+    updateSettingsLabel();
+  });
+  ui.toggleSfx.addEventListener('click', () => {
+    audio.sfxEnabled = !audio.sfxEnabled;
+    if (audio.sfxEnabled) { ensureAudio(); playSfx('buy'); }
     updateSettingsLabel();
   });
   ui.restart.addEventListener('click', startGame);
