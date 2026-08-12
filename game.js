@@ -545,7 +545,10 @@
       const safeDistance = Math.max(distanceToCar, .001);
       let pushX = dx / safeDistance;
       let pushY = dy / safeDistance;
-      if (car.type === 'engine') {
+      const engineFrontHit = car.type === 'engine'
+        && dx > car.radius * .35
+        && Math.abs(dy) < car.radius * .78;
+      if (engineFrontHit) {
         pushX = -1;
         pushY = p.y < rail.center ? -1.25 : 1.25;
         const pushLength = Math.hypot(pushX, pushY);
