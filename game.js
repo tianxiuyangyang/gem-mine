@@ -234,7 +234,7 @@
     }
     if (monster.weapon === 'sniper') {
       playSfx('sniper');
-      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 720, vy: Math.sin(base) * 720, radius: 8, type: 'sniper' });
+      state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 1080, vy: Math.sin(base) * 1080, radius: 8, type: 'sniper' });
       monster.cooldown = 2.05;
       monster.flash = .16;
       return;
@@ -660,7 +660,7 @@
           continue;
         }
         p.hitCooldown = .2;
-        const damage = bullet.type === 'sniper' ? (p.helmet ? 10 : 45) : (p.helmet ? 10 : 30);
+        const damage = bullet.type === 'sniper' ? (p.helmet ? 20 : 45) : (p.helmet ? 10 : 30);
         p.health = Math.max(0, p.health - damage);
         playSfx('hurt');
         emit(p.x, p.y, '#ff9075', 10, 120);
