@@ -278,7 +278,7 @@
     const shardCount = 12;
     for (let i = 0; i < shardCount; i++) {
       const angle = baseAngle + i / shardCount * TAU + Math.PI / shardCount;
-      state.bullets.push({ x: bullet.x, y: bullet.y, vx: Math.cos(angle) * SPLIT_SHARD_SPEED, vy: Math.sin(angle) * SPLIT_SHARD_SPEED, radius: 7, type: 'splitShard', hitPlayer: false });
+      state.bullets.push({ x: bullet.x, y: bullet.y, vx: Math.cos(angle) * SPLIT_SHARD_SPEED, vy: Math.sin(angle) * SPLIT_SHARD_SPEED, radius: 7, type: 'splitShard', hitPlayer: false, wallBounces: 0 });
     }
   }
 
@@ -544,11 +544,11 @@
       spawnTrain();
       state.trainTimer = rand(15, 21);
     }
-    if (state.time >= 180) {
+    if (state.time >= 130) {
       state.verticalTrainTimer -= dt;
       if (state.verticalTrainTimer <= 0) {
         spawnVerticalTrain();
-        state.verticalTrainTimer = rand(18, 25);
+        state.verticalTrainTimer = rand(12, 16.7);
       }
     }
     for (const train of state.trains) {
@@ -668,6 +668,22 @@
       }
       const wall = state.walls.find(candidate => candidate.hits < 3 && circleHit(bullet, candidate));
       if (wall) {
+        if (bullet.type === 'splitShard' && bullet.wallBounces < 1) {
+          const dx = bullet.x - wall.x;
+          const dy = bullet.y - wall.y;
+          const length = Math.max(Math.hypot(dx, dy), 1);
+          const nx = dx / length;
+          const ny = dy / length;
+          const dot = bullet.vx * nx + bullet.vy * ny;
+          bullet.vx -= 2 * dot * nx;
+          bullet.vy -= 2 * dot * ny;
+          bullet.x = wall.x + nx * (wall.radius + bullet.radius + 2);
+          bullet.y = wall.y + ny * (wall.radius + bullet.radius + 2);
+          bullet.wallBounces++;
+          damageWall(wall);
+          emit(bullet.x, bullet.y, '#d7e9e7', 6, 75);
+          continue;
+        }
         if (bullet.type === 'splitter') {
           damageWall(wall);
           splitBullet(bullet);
