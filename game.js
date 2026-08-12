@@ -58,7 +58,7 @@
     gems: 0,
     cannonInventory: 1,
     inventory: Array(6).fill(null),
-    player: { x: 0, y: 0, radius: 16, speed: 235, facing: 0, skin: 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, speedBuff: 0, cannon: null },
+    player: { x: 0, y: 0, radius: 16, speed: 235, facing: 0, skin: 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, knockback: 0, knockbackVX: 0, knockbackVY: 0, knockbackSpin: 0, hitRotation: 0, speedBuff: 0, cannon: null },
     cannons: [],
     walls: [],
     umbrellas: [],
@@ -132,7 +132,7 @@
     world.cameraX = 0;
     world.cameraY = 0;
     state.screenShake = 0;
-    state.player = { x: world.w * .42, y: world.h * .54, radius: 16, speed: 235, facing: 0, skin: selectedSkin, health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, speedBuff: 0, cannon: null };
+    state.player = { x: world.w * .42, y: world.h * .54, radius: 16, speed: 235, facing: 0, skin: selectedSkin, health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, knockback: 0, knockbackVX: 0, knockbackVY: 0, knockbackSpin: 0, hitRotation: 0, speedBuff: 0, cannon: null };
     placeCannon(state.player.x + 46, state.player.y + 4);
     state.cannonInventory = 0;
     syncUI();
@@ -320,12 +320,24 @@
     p.hitCooldown = Math.max(0, p.hitCooldown - dt);
     p.trainHitCooldown = Math.max(0, p.trainHitCooldown - dt);
     p.stun = Math.max(0, p.stun - dt);
+    p.knockback = Math.max(0, p.knockback - dt);
     p.speedBuff = Math.max(0, p.speedBuff - dt);
     if (p.cannon) {
       p.x = p.cannon.x;
       p.y = p.cannon.y + 18;
       return;
     }
+    if (p.knockback > 0) {
+      p.x += p.knockbackVX * dt;
+      p.y += p.knockbackVY * dt;
+      p.knockbackVX *= Math.pow(.018, dt);
+      p.knockbackVY *= Math.pow(.018, dt);
+      p.hitRotation += p.knockbackSpin * dt;
+      p.x = clamp(p.x, 26, world.w - 26);
+      p.y = clamp(p.y, 26, world.h - 26);
+      return;
+    }
+    p.hitRotation *= Math.pow(.001, dt);
     if (p.stun > 0) return;
     let dx = 0;
     let dy = 0;
@@ -558,6 +570,11 @@
         if (p.trainHitCooldown <= 0) {
           p.trainHitCooldown = 1.2;
           p.stun = 1;
+          p.knockback = .35;
+          p.knockbackVX = pushX * 720;
+          p.knockbackVY = pushY * 720;
+          p.knockbackSpin = pushY > 0 ? 18 : -18;
+          p.hitRotation = 0;
           p.health = Math.max(0, p.health - 70);
           playSfx('hurt');
           emit(p.x, p.y, '#ff9075', 22, 185);
@@ -565,8 +582,8 @@
           showToast('被火车头撞出轨道！眩晕 1 秒（-70）');
           if (p.health <= 0) endGame();
         }
-        p.x = carPosition.x + pushX * (minDistance + 82);
-        p.y = carPosition.y + pushY * (minDistance + 82);
+        p.x = carPosition.x + pushX * (minDistance + 8);
+        p.y = carPosition.y + pushY * (minDistance + 8);
       } else {
         p.x = carPosition.x + pushX * (minDistance + 1);
         p.y = carPosition.y + pushY * (minDistance + 1);
@@ -1267,6 +1284,14 @@
 
   function drawPlayer(p) {
     ctx.save(); ctx.translate(p.x, p.y);
+    if (p.knockback > 0) {
+      ctx.globalAlpha = .72 + Math.sin(state.time * 42) * .22;
+      ctx.rotate(p.hitRotation);
+      ctx.scale(1.08, .9);
+    } else if (p.stun > 0) {
+      ctx.globalAlpha = .72 + Math.sin(state.time * 18) * .25;
+      ctx.rotate(Math.sin(state.time * 11) * .08);
+    }
     const palette = p.skin === 'snow'
       ? { body: '#7faeb1', fur: '#f5f0df', ear: '#e7dfc8', innerEar: '#c2b79d', tail: '#66999f', nose: '#e7a8ae' }
       : p.skin === 'mint'
