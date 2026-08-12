@@ -775,7 +775,7 @@
     ui.buyHelmet.title = state.player.helmet ? '探照灯头盔已佩戴' : nearShop ? '购买并佩戴探照灯头盔' : '靠近矿井补给站后购买';
     ui.buyFish.disabled = state.gems < 6 || !nearShop || state.inventory.every(item => item);
     ui.buyFish.title = nearShop ? '购买鱼罐头' : '靠近矿井补给站后购买';
-    ui.buyWall.disabled = state.gems < 10 || !nearShop || state.inventory.every(item => item);
+    ui.buyWall.disabled = state.gems < 8 || !nearShop || state.inventory.every(item => item);
     ui.buyCake.disabled = state.gems < 9 || !nearShop || state.inventory.every(item => item);
     ui.buyUmbrella.disabled = state.gems < 14 || !nearShop || state.inventory.every(item => item);
     ui.buyUmbrella.title = nearShop ? '购买保护伞' : '靠近矿井补给站后购买';
@@ -1523,7 +1523,7 @@
   }
 
   function buyWall() {
-    buyInventoryItem('wall', 10, '防护墙体已放入物品栏');
+    buyInventoryItem('wall', 8, '防护墙体已放入物品栏');
   }
 
   function buyCake() {
