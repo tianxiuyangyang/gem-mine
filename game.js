@@ -57,7 +57,7 @@
     gems: 0,
     cannonInventory: 1,
     inventory: Array(6).fill(null),
-    player: { x: 0, y: 0, radius: 16, speed: 235, facing: 0, skin: 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, speedBuff: 0, cannon: null },
+    player: { x: 0, y: 0, radius: 16, speed: 235, facing: 0, skin: 'peach', health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, speedBuff: 0, cannon: null },
     cannons: [],
     walls: [],
     umbrellas: [],
@@ -131,7 +131,7 @@
     world.cameraX = 0;
     world.cameraY = 0;
     state.screenShake = 0;
-    state.player = { x: world.w * .42, y: world.h * .54, radius: 16, speed: 235, facing: 0, skin: selectedSkin, health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, speedBuff: 0, cannon: null };
+    state.player = { x: world.w * .42, y: world.h * .54, radius: 16, speed: 235, facing: 0, skin: selectedSkin, health: 100, maxHealth: 100, helmet: false, hitCooldown: 0, trainHitCooldown: 0, stun: 0, speedBuff: 0, cannon: null };
     placeCannon(state.player.x + 46, state.player.y + 4);
     state.cannonInventory = 0;
     syncUI();
@@ -317,6 +317,8 @@
   function updatePlayer(dt) {
     const p = state.player;
     p.hitCooldown = Math.max(0, p.hitCooldown - dt);
+    p.trainHitCooldown = Math.max(0, p.trainHitCooldown - dt);
+    p.stun = Math.max(0, p.stun - dt);
     p.speedBuff = Math.max(0, p.speedBuff - dt);
     if (p.cannon) {
       p.x = p.cannon.x;
@@ -411,6 +413,7 @@
       state.umbrellas = state.umbrellas.filter(candidate => !candidate.destroyed);
       return;
     }
+    if (p.stun > 0) return;
     state.debris.push({ x: impact.x, y: impact.y, rotation: Math.random() * TAU, kind: 'rock', radius: rock.radius });
     emit(impact.x, impact.y, '#8b9ba1', 16, 170);
     state.screenShake = state.reducedMotion ? 0 : 9;
@@ -512,6 +515,7 @@
       if (!train.destroyed) {
         train.speed = TRAIN_BASE_SPEED * trainSpeedMultiplier();
         train.x += train.speed * dt;
+        resolveTrainCollisions(train);
         for (const car of train.cars) {
           if (car.type !== 'engine' || car.destroyed) continue;
           const monster = car.monster;
@@ -524,6 +528,48 @@
       }
     }
     state.trains = state.trains.filter(train => train.x < world.w + 340 && (!train.destroyed || train.x < world.w + 150));
+  }
+
+  function resolveTrainCollisions(train) {
+    const p = state.player;
+    for (const car of train.cars) {
+      if (car.destroyed) continue;
+      const carPosition = { x: train.x + car.offset, y: train.y, radius: car.radius };
+      const dx = p.x - carPosition.x;
+      const dy = p.y - carPosition.y;
+      const minDistance = p.radius + car.radius;
+      const distanceToCar = Math.hypot(dx, dy);
+      if (distanceToCar >= minDistance) continue;
+      if (p.cannon) p.cannon = null;
+
+      const safeDistance = Math.max(distanceToCar, .001);
+      let pushX = dx / safeDistance;
+      let pushY = dy / safeDistance;
+      if (car.type === 'engine') {
+        pushX = -1;
+        pushY = p.y < rail.center ? -1.25 : 1.25;
+        const pushLength = Math.hypot(pushX, pushY);
+        pushX /= pushLength;
+        pushY /= pushLength;
+        if (p.trainHitCooldown <= 0) {
+          p.trainHitCooldown = 1.2;
+          p.stun = 1;
+          p.health = Math.max(0, p.health - 70);
+          playSfx('hurt');
+          emit(p.x, p.y, '#ff9075', 22, 185);
+          state.screenShake = state.reducedMotion ? 0 : 13;
+          showToast('被火车头撞出轨道！眩晕 1 秒（-70）');
+          if (p.health <= 0) endGame();
+        }
+        p.x = carPosition.x + pushX * (minDistance + 82);
+        p.y = carPosition.y + pushY * (minDistance + 82);
+      } else {
+        p.x = carPosition.x + pushX * (minDistance + 1);
+        p.y = carPosition.y + pushY * (minDistance + 1);
+      }
+      p.x = clamp(p.x, 26, world.w - 26);
+      p.y = clamp(p.y, 26, world.h - 26);
+    }
   }
 
   function updateShells(dt) {
@@ -1248,6 +1294,12 @@
     ctx.fillStyle = '#2f3c43'; ctx.beginPath(); ctx.arc(-5, -10, 2.1, 0, TAU); ctx.arc(5, -10, 2.1, 0, TAU); ctx.fill();
     ctx.fillStyle = palette.nose; ctx.beginPath(); ctx.arc(0, -5, 2.4, 0, TAU); ctx.fill();
     ctx.strokeStyle = palette.tail; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 7); ctx.quadraticCurveTo(24, 2, 20, -10); ctx.stroke();
+    if (p.stun > 0) {
+      ctx.fillStyle = '#ffe37b';
+      for (const [x, y] of [[-13, -35], [0, -43], [13, -35]]) {
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, TAU); ctx.fill();
+      }
+    }
     ctx.restore();
   }
 
@@ -1404,6 +1456,7 @@
   }
 
   function toggleCannon() {
+    if (state.player.stun > 0) return;
     if (state.player.cannon) { state.player.cannon = null; return; }
     const nearest = findNearestCannon();
     if (nearest) { state.player.cannon = nearest; showToast('炮台已接管'); }
@@ -1468,6 +1521,7 @@
     const item = state.inventory[index];
     if (!item) return;
     const p = state.player;
+    if (p.stun > 0) return;
     if (item === 'cannon') {
       deployInventoryCannon(index);
       syncUI();
@@ -1527,7 +1581,7 @@
     }
     if (paused || event.repeat) return;
     if (event.code === 'KeyE') toggleCannon();
-    if (event.code === 'KeyQ' && !state.player.cannon && state.cannonInventory) {
+    if (event.code === 'KeyQ' && !state.player.stun && !state.player.cannon && state.cannonInventory) {
       placeFirstCannon();
     }
     if (event.code === 'KeyP' && !event.repeat) {
