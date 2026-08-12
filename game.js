@@ -91,7 +91,7 @@
   const world = { w: 1800 * MAP_SCALE, h: 1100 * MAP_SCALE, cameraX: 0, cameraY: 0 };
   const rail = { bandTop: 350 * MAP_SCALE, bandHeight: 112 * MAP_SCALE, upper: 370 * MAP_SCALE, lower: 440 * MAP_SCALE, center: 405 * MAP_SCALE };
   const shopZone = { x: 1510 * MAP_SCALE, y: 860 * MAP_SCALE, w: 220 * MAP_SCALE, h: 155 * MAP_SCALE };
-  const verticalRail = { x: shopZone.x - 112, width: 98 };
+  const verticalRail = { x: shopZone.x - 250, width: 98 };
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
