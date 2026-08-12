@@ -21,6 +21,7 @@
     toast: document.querySelector('#toast'),
     pause: document.querySelector('#pause-screen'),
     resume: document.querySelector('#resume'),
+    pauseMenu: document.querySelector('#pause-menu'),
     start: document.querySelector('#start-screen'),
     mainMenu: document.querySelector('#main-menu'),
     menuPages: document.querySelector('#menu-pages'),
@@ -1626,6 +1627,7 @@
   ui.buyCake.addEventListener('click', buyCake);
   ui.buyUmbrella.addEventListener('click', buyUmbrella);
   ui.resume.addEventListener('click', () => { paused = false; ui.pause.hidden = true; last = performance.now(); });
+  ui.pauseMenu.addEventListener('click', returnToMenu);
   ui.menuStart.addEventListener('click', startGame);
   ui.menuSkins.addEventListener('click', () => showMenuPage('skins'));
   ui.menuTutorial.addEventListener('click', () => showMenuPage('tutorial'));
