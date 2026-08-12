@@ -325,6 +325,7 @@
       p.y = p.cannon.y + 18;
       return;
     }
+    if (p.stun > 0) return;
     let dx = 0;
     let dy = 0;
     if (keys.has('KeyW')) dy--;
@@ -413,7 +414,6 @@
       state.umbrellas = state.umbrellas.filter(candidate => !candidate.destroyed);
       return;
     }
-    if (p.stun > 0) return;
     state.debris.push({ x: impact.x, y: impact.y, rotation: Math.random() * TAU, kind: 'rock', radius: rock.radius });
     emit(impact.x, impact.y, '#8b9ba1', 16, 170);
     state.screenShake = state.reducedMotion ? 0 : 9;
