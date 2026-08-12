@@ -68,7 +68,7 @@
     gemsOnGround: [],
     particles: [],
     trains: [],
-    trainTimer: 6,
+    trainTimer: 2,
     trainRound: 0,
     fallingRocks: [],
     gemMine: { x: 175, y: 0, repaired: false, productionTimer: 3 },
@@ -120,7 +120,7 @@
     state.gemsOnGround = [];
     state.particles = [];
     state.trains = [];
-    state.trainTimer = 6;
+    state.trainTimer = 2;
     state.trainRound = 0;
     state.fallingRocks = [];
     state.gemMine = { x: 175, y: world.h - 180, repaired: false, productionTimer: 3 };
