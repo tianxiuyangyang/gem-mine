@@ -3,6 +3,7 @@
   const ctx = canvas.getContext('2d');
   const ui = {
     gemCount: document.querySelector('#gem-count'),
+    gameDifficulty: document.querySelector('#game-difficulty'),
     healthText: document.querySelector('#health-text'),
     healthFill: document.querySelector('#health-fill'),
     healthHud: document.querySelector('.health-hud'),
@@ -26,6 +27,7 @@
     buyWall: document.querySelector('#buy-wall'),
     buyCake: document.querySelector('#buy-cake'),
     buyUmbrella: document.querySelector('#buy-umbrella'),
+    shopPrices: [...document.querySelectorAll('[data-price]')],
     buffHud: document.querySelector('#buff-hud'),
     buffText: document.querySelector('#buff-text'),
     toast: document.querySelector('#toast'),
@@ -57,6 +59,11 @@
     gameOver: document.querySelector('#game-over'),
     restart: document.querySelector('#restart'),
     gameOverMenu: document.querySelector('#game-over-menu'),
+    artifactScreen: document.querySelector('#artifact-screen'),
+    artifactOptions: document.querySelector('#artifact-options'),
+    difficultyCurrent: document.querySelector('#difficulty-current'),
+    difficultySelect: document.querySelector('#difficulty-select'),
+    difficultyOptions: [...document.querySelectorAll('.difficulty-option')],
   };
 
   const TAU = Math.PI * 2;
@@ -70,7 +77,9 @@
   let toastTimer = 0;
   let testGemPresses = [];
   let testWeatherPresses = [];
+  let testAirdropPresses = [];
   let gameMode = 'single';
+  let selectedDifficulty = 'normal';
   let weatherCanvas = null;
   let weatherCtx = null;
   const audio = { context: null, musicEnabled: true, sfxEnabled: true, musicTimer: 0, musicStep: 0 };
@@ -90,12 +99,15 @@
     sniperTrails: [],
     gemsOnGround: [],
     particles: [],
+    shockwaves: [],
+    holyCupTimer: 2,
     trains: [],
     trainTimer: 2,
     verticalTrainTimer: 0,
     trainRound: 0,
     fallingRocks: [],
-    gemMine: { x: 175, y: 0, repaired: false, productionTimer: 3 },
+    gemMine: { x: 175, y: 0, repaired: false, upgraded: false, productionTimer: 3 },
+    airdrop: { spawned: false, opened: false, x: 0, y: -100, targetY: 0, opener: null },
     nextEarthquakeAt: 60,
     earthquakeEnd: 0,
     rockTimer: 0,
@@ -117,10 +129,29 @@
   const SPLIT_SHARD_SPEED = 126 * MONSTER_AMMO_SPEED_FACTOR;
   const SPLITTER_LARGE_SPEED = 105 * 1.5;
   const WALL_MAX_HITS = 5;
+  const DIFFICULTIES = {
+    easy: { name: '简单模式', fireRate: .5, gemDropMultiplier: 1 },
+    normal: { name: '正常模式', fireRate: 1, gemDropMultiplier: 1 },
+    hard: { name: '困难模式', fireRate: 1.5, gemDropMultiplier: 1 },
+    hell: { name: '地狱模式', fireRate: 2, gemDropMultiplier: .5 },
+  };
+  const ARTIFACTS = {
+    necklace: { name: '魔法项链', icon: '✦', description: '受到致命伤害时保留 10 点生命，并释放冲击波抵消周围弹幕。' },
+    member: { name: '会员卡', icon: 'VIP', description: '持有期间，商店所有物品价格打七折，最终价格四舍五入。' },
+    battery: { name: '矿井电池', icon: '▮', description: '靠近修缮后的宝石矿井后点击使用，产宝石间隔缩短至 1.5 秒。' },
+    phoenix: { name: '不死鸟之眼', icon: '◉', description: '用大炮摧毁 1 个车厢时，恢复 8 点生命值。' },
+    grail: { name: '圣杯', icon: '♜', description: '持有期间，每 2 秒恢复 1 点生命值。' },
+    barrel: { name: '火药桶', icon: '✹', description: '持有期间，操控大炮的发射冷却缩短至 2 秒。' },
+  };
   const world = { w: 1800 * MAP_SCALE, h: 1100 * MAP_SCALE, cameraX: 0, cameraY: 0 };
   const rail = { bandTop: 350 * MAP_SCALE, bandHeight: 112 * MAP_SCALE, upper: 370 * MAP_SCALE, lower: 440 * MAP_SCALE, center: 405 * MAP_SCALE };
   const shopZone = { x: 1510 * MAP_SCALE, y: 860 * MAP_SCALE, w: 220 * MAP_SCALE, h: 155 * MAP_SCALE };
   const verticalRail = { x: shopZone.x - 250, width: 98 };
+
+  function difficultyConfig() { return DIFFICULTIES[selectedDifficulty]; }
+  function weatherInterval() { return selectedDifficulty === 'hard' || selectedDifficulty === 'hell' ? 40 : 80; }
+  function hasTyphoonWeather() { return state.weather === 'typhoon' || state.weather === 'hellstorm'; }
+  function hasSandstormWeather() { return state.weather === 'sandstorm' || state.weather === 'hellstorm'; }
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -141,7 +172,8 @@
     const selectedSkin = state.player.skin || 'peach';
     testGemPresses = [];
     testWeatherPresses = [];
-    state.gems = 0;
+    testAirdropPresses = [];
+    state.gems = selectedDifficulty === 'easy' ? 5 : 0;
     state.inventory = Array(6).fill(null);
     state.inventory2 = Array(6).fill(null);
     state.cannons = [];
@@ -153,18 +185,21 @@
     state.sniperTrails = [];
     state.gemsOnGround = [];
     state.particles = [];
+    state.shockwaves = [];
+    state.holyCupTimer = 2;
     state.trains = [];
     state.trainTimer = 2;
     state.verticalTrainTimer = 0;
     state.trainRound = 0;
     state.fallingRocks = [];
-    state.gemMine = { x: 175, y: world.h - 180, repaired: false, productionTimer: 3 };
-    state.nextEarthquakeAt = 60;
+    state.gemMine = { x: 175, y: world.h - 180, repaired: false, upgraded: false, productionTimer: 3 };
+    state.airdrop = { spawned: false, opened: false, x: world.w * .5, y: -100, targetY: world.h * .5, opener: null };
+    state.nextEarthquakeAt = selectedDifficulty === 'hell' ? 0 : 60;
     state.earthquakeEnd = 0;
     state.rockTimer = 0;
     state.weather = null;
     state.weatherEnd = 0;
-    state.nextWeatherAt = 80;
+    state.nextWeatherAt = weatherInterval();
     state.weatherCenter = { x: 0, y: 0 };
     state.weatherDamageTimer = 0;
     state.rescue = { rescuer: null, target: null, progress: 0 };
@@ -272,12 +307,13 @@
 
   function fireShell(cannon, angleOverride = null) {
     if (cannon.cooldown > 0) return;
+    const owner = getPlayers().find(player => player.cannon === cannon) || state.player;
     playSfx('cannon');
     const target = screenToWorld(mouse.x, mouse.y);
     if (angleOverride !== null) cannon.angle = angleOverride;
     else cannon.angle = Math.atan2(target.y - cannon.y, target.x - cannon.x);
-    state.shells.push({ x: cannon.x + Math.cos(cannon.angle) * 36, y: cannon.y + Math.sin(cannon.angle) * 36, vx: Math.cos(cannon.angle) * 570, vy: Math.sin(cannon.angle) * 570, radius: 7, life: 2.3 });
-    cannon.cooldown = 5;
+    state.shells.push({ x: cannon.x + Math.cos(cannon.angle) * 36, y: cannon.y + Math.sin(cannon.angle) * 36, vx: Math.cos(cannon.angle) * 570, vy: Math.sin(cannon.angle) * 570, radius: 7, life: 2.3, owner });
+    cannon.cooldown = hasArtifact(owner, 'barrel') ? 2 : 5;
     cannon.flash = .14;
     state.screenShake = state.reducedMotion ? 0 : 5;
     emit(cannon.x + Math.cos(cannon.angle) * 42, cannon.y + Math.sin(cannon.angle) * 42, '#ffd76d', 13, 165);
@@ -292,17 +328,18 @@
     const dx = target.x - engine.x;
     const dy = target.y - engine.y;
     const base = monster.angle;
+    const fireIntervalMultiplier = 1 / difficultyConfig().fireRate;
     if (monster.weapon === 'splitter') {
       playSfx('splitter');
       state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * SPLITTER_LARGE_SPEED, vy: Math.sin(base) * SPLITTER_LARGE_SPEED, radius: 16, type: 'splitter' });
-      monster.cooldown = 1.8;
+      monster.cooldown = 1.8 * fireIntervalMultiplier;
       monster.flash = .16;
       return;
     }
     if (monster.weapon === 'sniper') {
       playSfx('sniper');
       state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(base) * 1080, vy: Math.sin(base) * 1080, radius: 8, type: 'sniper' });
-      monster.cooldown = 2.05;
+      monster.cooldown = 2.05 * fireIntervalMultiplier;
       monster.flash = .16;
       return;
     }
@@ -313,7 +350,7 @@
       const angle = base + i * .16;
       state.bullets.push({ x: engine.x, y: engine.y, vx: Math.cos(angle) * SHOTGUN_BULLET_SPEED, vy: Math.sin(angle) * SHOTGUN_BULLET_SPEED, radius: 7, hitPlayer: false });
     }
-    monster.cooldown = 1.65;
+    monster.cooldown = 1.65 * fireIntervalMultiplier;
     monster.flash = .16;
   }
 
@@ -337,7 +374,7 @@
     return 1;
   }
 
-  function explode(x, y, radius = 104) {
+  function explode(x, y, radius = 104, owner = null) {
     playSfx('blast');
     state.screenShake = state.reducedMotion ? 0 : 12;
     emit(x, y, '#ffe66d', 35, 260);
@@ -347,17 +384,23 @@
         if (car.destroyed) continue;
         if (car.type === 'engine') continue;
         const pos = trainCarPosition(train, car);
-        if (Math.hypot(pos.x - x, pos.y - y) < radius + car.radius) destroyCar(train, car, pos);
+        if (Math.hypot(pos.x - x, pos.y - y) < radius + car.radius) destroyCar(train, car, pos, owner);
       }
     }
   }
 
-  function destroyCar(train, car, pos) {
+  function destroyCar(train, car, pos, owner = null) {
     playSfx('blast');
     car.destroyed = true;
+    if (owner && !owner.downed && owner.health < owner.maxHealth && hasArtifact(owner, 'phoenix')) {
+      owner.health = Math.min(owner.maxHealth, owner.health + 8);
+      emit(owner.x, owner.y, '#ff9b5e', 11, 100);
+      showToast('不死鸟之眼燃起，恢复 8 点生命');
+    }
     emit(pos.x, pos.y, car.type === 'gem' ? '#48e0cf' : '#a3a3a2', 28, 210);
     if (car.type === 'gem') {
-      const count = 5 + Math.floor(Math.random() * 4);
+      const normalCount = 5 + Math.floor(Math.random() * 4);
+      const count = Math.max(1, Math.round(normalCount * difficultyConfig().gemDropMultiplier));
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * TAU;
         state.gemsOnGround.push({ x: pos.x, y: pos.y, vx: Math.cos(angle) * rand(55, 160), vy: Math.sin(angle) * rand(55, 160), radius: 9, spin: Math.random() * TAU, age: 0, picked: false });
@@ -370,6 +413,8 @@
     state.time += dt;
     updateEarthquake(dt);
     updateWeather(dt);
+    updateAirdrop(dt);
+    updateArtifactEffects(dt);
     updatePlayer(dt);
     updatePlayer2(dt);
     updateRescue(dt);
@@ -377,6 +422,7 @@
     updateTrains(dt);
     updateShells(dt);
     updateBullets(dt);
+    updateShockwaves(dt);
     updateGems(dt);
     updateGemMine(dt);
     updateParticles(dt);
@@ -439,7 +485,7 @@
       p.y += dy / len * speed * dt;
       p.facing = Math.atan2(dy, dx);
     }
-    if (state.weather === 'typhoon') {
+    if (hasTyphoonWeather()) {
       const force = 156;
       const towardCenterX = state.weatherCenter.x - p.x;
       const towardCenterY = state.weatherCenter.y - p.y;
@@ -467,7 +513,7 @@
 
   function updateEarthquake(dt) {
     if (state.time >= state.nextEarthquakeAt) {
-      state.earthquakeEnd = state.time + 10;
+      state.earthquakeEnd = state.time + (selectedDifficulty === 'hell' ? 20 : 10);
       state.nextEarthquakeAt += 60;
       state.rockTimer = 0;
       showToast('地震开始了，注意躲避落石！');
@@ -563,10 +609,11 @@
   }
 
   function startWeatherEvent() {
-    const duration = state.time >= 240 ? 20 : 10;
-    state.weather = Math.random() < .5 ? 'typhoon' : 'sandstorm';
+    const duration = (state.time >= 240 ? 20 : 10) + (selectedDifficulty === 'hell' ? 10 : 0);
+    const simultaneousWeather = selectedDifficulty === 'hell' || (selectedDifficulty === 'hard' && Math.random() < .2);
+    state.weather = simultaneousWeather ? 'hellstorm' : (Math.random() < .5 ? 'typhoon' : 'sandstorm');
     state.weatherEnd = state.time + duration;
-    if (state.weather === 'typhoon') {
+    if (hasTyphoonWeather()) {
       const angle = Math.random() * TAU;
       const radius = rand(220, 360);
       state.weatherCenter = {
@@ -574,7 +621,7 @@
         y: clamp(state.player.y + Math.sin(angle) * radius, 120, world.h - 120),
       };
       state.weatherDamageTimer = 0;
-      showToast('台风来袭！风向正在改变');
+      showToast(state.weather === 'hellstorm' ? '地狱天气来袭！台风与沙尘暴同时出现' : '台风来袭！风向正在改变');
     } else {
       showToast('沙尘暴来袭！能见度降低');
     }
@@ -582,21 +629,21 @@
 
   function summonTestWeather() {
     startWeatherEvent();
-    state.nextWeatherAt = state.time + 80;
-    showToast(state.weather === 'typhoon' ? '测试：台风已召唤' : '测试：沙尘暴已召唤');
+    state.nextWeatherAt = state.time + weatherInterval();
+    showToast(hasTyphoonWeather() && hasSandstormWeather() ? '测试：地狱天气已召唤' : state.weather === 'typhoon' ? '测试：台风已召唤' : '测试：沙尘暴已召唤');
   }
 
   function updateWeather(dt) {
     if (!state.weather && state.time >= state.nextWeatherAt) {
       startWeatherEvent();
-      state.nextWeatherAt += 80;
+      state.nextWeatherAt += weatherInterval();
     }
     if (state.weather && state.time >= state.weatherEnd) {
       state.weather = null;
       state.weatherDamageTimer = 0;
       showToast('恶劣天气结束');
     }
-    if (state.weather !== 'typhoon') return;
+    if (!hasTyphoonWeather()) return;
     state.weatherDamageTimer -= dt;
     if (state.weatherDamageTimer > 0) return;
     state.weatherDamageTimer += .1;
@@ -773,7 +820,7 @@
           if (car.destroyed) continue;
           const pos = { ...trainCarPosition(train, car), radius: car.radius };
           if (circleHit(shell, pos, 4)) {
-            explode(shell.x, shell.y);
+            explode(shell.x, shell.y, 104, shell.owner);
             shell.life = 0;
             hit = true;
             break;
@@ -781,7 +828,7 @@
         }
         if (hit) break;
       }
-      if (shell.life <= 0 && !hit) explode(shell.x, shell.y, 66);
+      if (shell.life <= 0 && !hit) explode(shell.x, shell.y, 66, shell.owner);
     }
     state.shells = state.shells.filter(s => s.life > 0 && s.x > -80 && s.y > -80 && s.x < world.w + 80 && s.y < world.h + 80);
   }
@@ -840,7 +887,7 @@
           bullet.damaged = true;
           if (bullet.type === 'splitShard') damagePlayer(25, 8, '分裂弹命中', p);
           else {
-            const damage = bullet.type === 'sniper' ? (p.helmet ? 20 : 45) : (p.helmet ? 10 : 30);
+            const damage = bullet.type === 'sniper' ? (p.helmet ? 20 : 45) : (p.helmet ? 10 : 25);
             damagePlayer(damage, damage, bullet.type === 'sniper' ? '狙击弹命中' : '散弹命中', p);
           }
           break;
@@ -855,6 +902,15 @@
     const p = player;
     const damage = p.helmet ? helmetDamage : normalDamage;
     p.hitCooldown = .2;
+    if (p.health - damage <= 0 && consumeArtifact(p, 'necklace')) {
+      p.health = 10;
+      state.shockwaves.push({ x: p.x, y: p.y, radius: 0, previousRadius: 0, maxRadius: 280, speed: 420, life: 0, maxLife: .8 });
+      emit(p.x, p.y, '#d99bff', 38, 280);
+      state.screenShake = state.reducedMotion ? 0 : 13;
+      playSfx('repair');
+      showToast('魔法项链碎裂！冲击波抵消了周围弹幕');
+      return;
+    }
     p.health = Math.max(0, p.health - damage);
     playSfx('hurt');
     emit(p.x, p.y, '#ff9075', 10, 120);
@@ -943,9 +999,106 @@
     if (!mine.repaired) return;
     mine.productionTimer -= dt;
     if (mine.productionTimer > 0) return;
-    mine.productionTimer += 3;
+    mine.productionTimer += mine.upgraded ? 1.5 : 3;
     state.gemsOnGround.push({ x: mine.x + 62, y: mine.y + 26, vx: rand(8, 24), vy: rand(-12, 12), radius: 9, spin: Math.random() * TAU, age: 0, picked: false });
     emit(mine.x + 62, mine.y + 26, '#69f5df', 6, 70);
+  }
+
+  function updateAirdrop(dt) {
+    const drop = state.airdrop;
+    if (!drop.spawned && state.time >= 90) {
+      drop.spawned = true;
+      drop.x = rand(120, world.w - 120);
+      drop.y = -120;
+      drop.targetY = rand(120, world.h - 120);
+      showToast('空投正在降落！');
+    }
+    if (drop.spawned && !drop.opened && drop.y < drop.targetY) {
+      drop.y = Math.min(drop.targetY, drop.y + 175 * dt);
+    }
+  }
+
+  function updateArtifactEffects(dt) {
+    state.holyCupTimer -= dt;
+    if (state.holyCupTimer > 0) return;
+    state.holyCupTimer += 2;
+    for (const player of getActivePlayers()) {
+      if (!hasArtifact(player, 'grail') || player.health >= player.maxHealth) continue;
+      player.health = Math.min(player.maxHealth, player.health + 1);
+      emit(player.x, player.y, '#f6d77b', 4, 52);
+    }
+  }
+
+  function summonTestAirdrop() {
+    if (state.airdrop.spawned) { showToast('空投已经出现过'); return; }
+    state.airdrop.spawned = true;
+    state.airdrop.x = rand(120, world.w - 120);
+    state.airdrop.y = -120;
+    state.airdrop.targetY = rand(120, world.h - 120);
+    showToast('测试：空投正在降落！');
+  }
+
+  function openAirdrop(player) {
+    const inventory = inventoryFor(player);
+    if (inventory.every(item => item)) { showToast('物品栏已满，无法打开空投'); return; }
+    state.airdrop.opened = true;
+    state.airdrop.opener = player;
+    paused = true;
+    ui.artifactScreen.hidden = false;
+    renderArtifactOptions();
+    playSfx('buy');
+  }
+
+  function renderArtifactOptions() {
+    const ids = Object.keys(ARTIFACTS).sort(() => Math.random() - .5).slice(0, 3);
+    ui.artifactOptions.replaceChildren();
+    for (const id of ids) {
+      const artifact = ARTIFACTS[id];
+      const button = document.createElement('button');
+      button.className = `artifact-option artifact-${id}`;
+      button.type = 'button';
+      button.innerHTML = `<span class="artifact-icon">${artifact.icon}</span><h3>${artifact.name}</h3><p>${artifact.description}</p>`;
+      button.addEventListener('click', () => selectArtifact(id));
+      ui.artifactOptions.appendChild(button);
+    }
+  }
+
+  function selectArtifact(id) {
+    const player = state.airdrop.opener || state.player;
+    const inventory = inventoryFor(player);
+    const slot = inventory.findIndex(item => !item);
+    if (slot < 0) { showToast('物品栏已满'); return; }
+    inventory[slot] = id;
+    ui.artifactScreen.hidden = true;
+    paused = false;
+    last = performance.now();
+    emit(player.x, player.y, '#d99bff', 20, 150);
+    showToast(`获得神器：${ARTIFACTS[id].name}`);
+    syncUI();
+  }
+
+  function closeArtifactChoice() {
+    if (ui.artifactScreen.hidden) return;
+    ui.artifactScreen.hidden = true;
+    state.airdrop.opened = false;
+    state.airdrop.opener = null;
+    paused = false;
+    last = performance.now();
+    showToast('已退出神器选择，靠近空投后可再次选择');
+  }
+
+  function hasArtifact(player, id) { return inventoryFor(player).includes(id); }
+
+  function consumeArtifact(player, id) {
+    const inventory = inventoryFor(player);
+    const slot = inventory.indexOf(id);
+    if (slot < 0) return false;
+    inventory[slot] = null;
+    return true;
+  }
+
+  function priceFor(player, basePrice) {
+    return hasArtifact(player, 'member') ? Math.round(basePrice * .7) : basePrice;
   }
 
   function updateParticles(dt) {
@@ -961,6 +1114,7 @@
 
   function syncUI() {
     ui.gemCount.textContent = state.gems;
+    ui.gameDifficulty.textContent = difficultyConfig().name;
     const healthPct = clamp(state.player.health / state.player.maxHealth, 0, 1);
     ui.healthFill.style.width = `${healthPct * 100}%`;
     ui.healthText.textContent = `${state.player.health} / ${state.player.maxHealth}`;
@@ -992,7 +1146,7 @@
       ui.hint.textContent = state.player.cannon ? '鼠标瞄准 · 左键发射 · E 离开炮台' : '鼠标瞄准 · 左键发射 · M 离开炮台';
       ui.hint.classList.add('visible');
     } else {
-      const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake' || item === 'umbrella');
+      const hasQuickItem = state.inventory.some(item => item === 'fish' || item === 'wall' || item === 'cake' || item === 'umbrella' || item === 'battery');
       const hasCannonItem = state.inventory.includes('cannon') || (isTwoPlayer() && state.inventory2.includes('cannon'));
       const nearMine = isNearGemMine();
       const mineHint = nearMine && !state.gemMine.repaired ? (state.gems >= 20 ? '点击宝石矿井修复（20 宝石）' : '需要 20 个宝石才能修复矿井') : '';
@@ -1002,19 +1156,25 @@
     }
     ui.wave.textContent = state.trains.length ? `第 ${state.trains[0].round} 轮火车正在穿过矿井` : `第 ${state.trainRound + 1} 轮列车 ${Math.ceil(Math.max(0, state.trainTimer))} 秒`;
     const nearShop = Boolean(getShopCustomer());
+    const shopPlayer = getShopCustomer() || state.player;
+    ui.shopPrices.forEach(price => {
+      const basePrice = Number(price.dataset.price);
+      const finalPrice = priceFor(shopPlayer, basePrice);
+      price.innerHTML = `<i class="gem-icon"></i>${finalPrice}`;
+    });
     if (state.time < state.earthquakeEnd) ui.wave.textContent = '地震中 · 落石来袭';
     if (state.weather === 'typhoon') ui.wave.textContent = `台风中 · 强风持续 ${Math.ceil(state.weatherEnd - state.time)} 秒`;
     if (state.weather === 'sandstorm') ui.wave.textContent = `沙尘暴中 · 能见度降低 ${Math.ceil(state.weatherEnd - state.time)} 秒`;
     if (state.rescue.rescuer) ui.wave.textContent = `救援中 · ${Math.ceil(state.rescue.progress / 4 * 100)}%`;
-    ui.buy.disabled = state.gems < 12 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
+    ui.buy.disabled = state.gems < priceFor(shopPlayer, 12) || !nearShop || inventoryFor(shopPlayer).every(item => item);
     ui.buy.title = nearShop ? '购买一门大炮' : '靠近矿井补给站后购买';
-    ui.buyHelmet.disabled = state.gems < 18 || !nearShop || (getShopCustomer() || state.player).helmet || inventoryFor(getShopCustomer() || state.player).every(item => item);
-    ui.buyHelmet.title = (getShopCustomer() || state.player).helmet ? '探照灯头盔已佩戴' : nearShop ? '购买并佩戴探照灯头盔' : '靠近矿井补给站后购买';
-    ui.buyFish.disabled = state.gems < 6 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
+    ui.buyHelmet.disabled = state.gems < priceFor(shopPlayer, 18) || !nearShop || shopPlayer.helmet || inventoryFor(shopPlayer).every(item => item);
+    ui.buyHelmet.title = shopPlayer.helmet ? '探照灯头盔已佩戴' : nearShop ? '购买并佩戴探照灯头盔' : '靠近矿井补给站后购买';
+    ui.buyFish.disabled = state.gems < priceFor(shopPlayer, 6) || !nearShop || inventoryFor(shopPlayer).every(item => item);
     ui.buyFish.title = nearShop ? '购买鱼罐头' : '靠近矿井补给站后购买';
-    ui.buyWall.disabled = state.gems < 8 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
-    ui.buyCake.disabled = state.gems < 9 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
-    ui.buyUmbrella.disabled = state.gems < 14 || !nearShop || inventoryFor(getShopCustomer() || state.player).every(item => item);
+    ui.buyWall.disabled = state.gems < priceFor(shopPlayer, 8) || !nearShop || inventoryFor(shopPlayer).every(item => item);
+    ui.buyCake.disabled = state.gems < priceFor(shopPlayer, 9) || !nearShop || inventoryFor(shopPlayer).every(item => item);
+    ui.buyUmbrella.disabled = state.gems < priceFor(shopPlayer, 14) || !nearShop || inventoryFor(shopPlayer).every(item => item);
     ui.buyUmbrella.title = nearShop ? '购买保护伞' : '靠近矿井补给站后购买';
     ui.buyCake.title = nearShop ? '购买蛋糕' : '靠近矿井补给站后购买';
     ui.buyWall.title = nearShop ? '购买防护墙体' : '靠近矿井补给站后购买';
@@ -1025,27 +1185,14 @@
       const itemType = inventory[index];
       const filled = Boolean(itemType);
       slot.classList.toggle('filled', filled);
-      const oldItem = slot.querySelector('.slot-cannon');
-      if (oldItem) oldItem.remove();
-      const oldHelmet = slot.querySelector('.slot-helmet');
-      if (oldHelmet) oldHelmet.remove();
-      const oldFish = slot.querySelector('.slot-fish');
-      if (oldFish) oldFish.remove();
-      const oldWall = slot.querySelector('.slot-wall');
-      if (oldWall) oldWall.remove();
-      const oldCake = slot.querySelector('.slot-cake');
-      if (oldCake) oldCake.remove();
-      const oldUmbrella = slot.querySelector('.slot-umbrella');
-      if (oldUmbrella) oldUmbrella.remove();
+      slot.querySelectorAll('.slot-cannon, .slot-helmet, .slot-fish, .slot-wall, .slot-cake, .slot-umbrella, .slot-necklace, .slot-member, .slot-battery, .slot-phoenix, .slot-grail, .slot-barrel').forEach(item => item.remove());
       if (filled) {
         const item = document.createElement('span');
-        item.className = itemType === 'helmet' ? 'slot-helmet' : itemType === 'fish' ? 'slot-fish' : itemType === 'wall' ? 'slot-wall' : itemType === 'cake' ? 'slot-cake' : itemType === 'umbrella' ? 'slot-umbrella' : 'slot-cannon';
-        item.setAttribute('aria-label', itemType === 'helmet' ? '探照灯头盔' : itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : '大炮');
-        if (itemType === 'cake') item.setAttribute('aria-label', '蛋糕');
-        if (itemType === 'umbrella') item.setAttribute('aria-label', '保护伞');
+        item.className = itemType === 'helmet' ? 'slot-helmet' : itemType === 'fish' ? 'slot-fish' : itemType === 'wall' ? 'slot-wall' : itemType === 'cake' ? 'slot-cake' : itemType === 'umbrella' ? 'slot-umbrella' : itemType === 'necklace' ? 'slot-necklace' : itemType === 'member' ? 'slot-member' : itemType === 'battery' ? 'slot-battery' : itemType === 'phoenix' ? 'slot-phoenix' : itemType === 'grail' ? 'slot-grail' : itemType === 'barrel' ? 'slot-barrel' : 'slot-cannon';
+        item.setAttribute('aria-label', ARTIFACTS[itemType]?.name || (itemType === 'helmet' ? '探照灯头盔' : itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : '大炮'));
         slot.appendChild(item);
       }
-      const itemName = itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : itemType === 'cannon' ? '大炮' : itemType === 'cake' ? '蛋糕' : itemType === 'umbrella' ? '保护伞' : '探照灯头盔';
+      const itemName = ARTIFACTS[itemType]?.name || (itemType === 'fish' ? '鱼罐头' : itemType === 'wall' ? '防护墙体' : itemType === 'cannon' ? '大炮' : itemType === 'cake' ? '蛋糕' : itemType === 'umbrella' ? '保护伞' : '探照灯头盔');
       slot.title = filled ? `${owner === 'P2' ? '点击' : `按 ${index + 1} 或点击`}使用${itemName}` : `${owner} 物品栏 ${index + 1}`;
     });
   }
@@ -1126,6 +1273,7 @@
     drawRail();
     drawShopBuilding();
     drawGemMine();
+    drawAirdrop();
     for (const debris of state.debris) drawDebris(debris);
     for (const wall of state.walls) drawWall(wall);
     for (const umbrella of state.umbrellas) drawUmbrella(umbrella);
@@ -1138,6 +1286,7 @@
     for (const shell of state.shells) drawShell(shell);
     for (const trail of state.sniperTrails) drawSniperTrail(trail);
     for (const bullet of state.bullets) drawBullet(bullet);
+    for (const wave of state.shockwaves) drawShockwave(wave);
     for (const rock of state.fallingRocks) drawFallingRock(rock);
     drawPlayer(state.player);
     if (isTwoPlayer()) drawPlayer(state.player2);
@@ -1178,7 +1327,7 @@
     const w = innerWidth;
     const h = innerHeight;
     const t = state.time;
-    if (state.weather === 'sandstorm') {
+    if (hasSandstormWeather()) {
       const visibilityRadius = Math.min(260, Math.max(150, Math.min(w, h) * .2));
       const visiblePlayers = getPlayers().filter(p => !p.downed);
       if (!weatherCanvas) {
@@ -1219,7 +1368,9 @@
       }
       ctx.restore();
       ctx.drawImage(weatherCanvas, 0, 0, w, h);
-    } else {
+    }
+    if (hasTyphoonWeather()) {
+      ctx.save();
       ctx.fillStyle = 'rgba(44, 124, 143, .18)';
       ctx.fillRect(0, 0, w, h);
       const cx = state.weatherCenter.x - world.cameraX;
@@ -1266,7 +1417,10 @@
       ctx.beginPath(); ctx.ellipse(0, 75, 43, 13, 0, 0, TAU); ctx.fill();
       ctx.strokeStyle = 'rgba(206, 255, 243, .8)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.ellipse(0, 75, 43, 13, 0, 0, TAU); ctx.stroke();
+      ctx.restore();
     }
+    // In hellstorm, redraw the sandstorm mask last so wind effects cannot leak through the fog.
+    if (hasSandstormWeather() && hasTyphoonWeather()) ctx.drawImage(weatherCanvas, 0, 0, w, h);
     ctx.restore();
   }
 
@@ -1435,20 +1589,20 @@
     ctx.beginPath(); ctx.ellipse(0, 55, 105, 19, 0, 0, TAU); ctx.fill();
 
     // Rocky cliff face framing the mine entrance.
-    ctx.fillStyle = mine.repaired ? '#405d62' : '#535661';
+    ctx.fillStyle = mine.upgraded ? '#59466f' : mine.repaired ? '#405d62' : '#535661';
     ctx.beginPath();
     ctx.moveTo(-100, 48); ctx.lineTo(-88, -17); ctx.lineTo(-65, -62); ctx.lineTo(-25, -75);
     ctx.lineTo(18, -70); ctx.lineTo(67, -51); ctx.lineTo(96, -7); ctx.lineTo(102, 48);
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle = '#1b2b34'; ctx.lineWidth = 5; ctx.stroke();
 
-    ctx.fillStyle = mine.repaired ? '#223b43' : '#252d37';
+    ctx.fillStyle = mine.upgraded ? '#302546' : mine.repaired ? '#223b43' : '#252d37';
     ctx.beginPath(); ctx.ellipse(1, 24, 62, 48, 0, Math.PI, 0); ctx.lineTo(63, 48); ctx.lineTo(-61, 48); ctx.closePath(); ctx.fill();
 
     if (mine.repaired) {
       ctx.save();
       ctx.globalAlpha = glow;
-      ctx.fillStyle = '#57e6d3';
+      ctx.fillStyle = mine.upgraded ? '#b679ff' : '#57e6d3';
       ctx.beginPath(); ctx.ellipse(1, 22, 46, 34, 0, Math.PI, 0); ctx.lineTo(47, 47); ctx.lineTo(-45, 47); ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
 
@@ -1463,10 +1617,10 @@
       ctx.strokeStyle = '#8b6749'; ctx.lineWidth = 5;
       for (let x = -72; x <= 67; x += 24) { ctx.beginPath(); ctx.moveTo(x, 32); ctx.lineTo(x + 5, 57); ctx.stroke(); }
 
-      ctx.fillStyle = '#f8d56d'; ctx.beginPath(); ctx.arc(-67, -29, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = mine.upgraded ? '#d9a7ff' : '#f8d56d'; ctx.beginPath(); ctx.arc(-67, -29, 9, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#2b363b'; ctx.lineWidth = 4; ctx.stroke();
-      ctx.fillStyle = 'rgba(249, 221, 115, .17)'; ctx.beginPath(); ctx.moveTo(-67, -20); ctx.lineTo(-105, 26); ctx.lineTo(-28, 26); ctx.closePath(); ctx.fill();
-      for (const [x, y, size] of [[-17, 6, 10], [12, 22, 12], [30, 1, 8]]) drawGem(x, y, size / 13, '#7ff5e1', .92);
+      ctx.fillStyle = mine.upgraded ? 'rgba(210, 148, 255, .22)' : 'rgba(249, 221, 115, .17)'; ctx.beginPath(); ctx.moveTo(-67, -20); ctx.lineTo(-105, 26); ctx.lineTo(-28, 26); ctx.closePath(); ctx.fill();
+      for (const [x, y, size] of [[-17, 6, 10], [12, 22, 12], [30, 1, 8]]) drawGem(x, y, size / 13, mine.upgraded ? '#d69aff' : '#7ff5e1', .92);
       ctx.restore();
     } else {
       ctx.fillStyle = '#777a7e';
@@ -1484,12 +1638,69 @@
       ctx.restore();
     }
 
-    ctx.fillStyle = mine.repaired ? '#efffd9' : '#e5c995';
+    ctx.fillStyle = mine.upgraded ? '#f0dcff' : mine.repaired ? '#efffd9' : '#e5c995';
     ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(mine.repaired ? '宝石矿井' : '坍塌矿井', 0, -91);
     ctx.font = '900 10px sans-serif';
-    ctx.fillStyle = mine.repaired ? '#70eddb' : '#e49b72';
-    ctx.fillText(mine.repaired ? '每 3 秒产出宝石' : 'R  修复 · 20 宝石', 0, -76);
+    ctx.fillStyle = mine.upgraded ? '#d99bff' : mine.repaired ? '#70eddb' : '#e49b72';
+    ctx.fillText(mine.repaired ? (mine.upgraded ? '每 1.5 秒产出宝石' : '每 3 秒产出宝石') : '点击修复 · 20 宝石', 0, -76);
+    ctx.restore();
+  }
+
+  function updateShockwaves(dt) {
+    for (const wave of state.shockwaves) {
+      wave.previousRadius = wave.radius;
+      wave.radius = Math.min(wave.maxRadius, wave.radius + wave.speed * dt);
+      wave.life += dt;
+      for (const bullet of state.bullets) {
+        if (bullet.blocked || bullet.spent) continue;
+        const bulletDistance = Math.hypot(bullet.x - wave.x, bullet.y - wave.y);
+        if (bulletDistance + bullet.radius >= wave.previousRadius && bulletDistance - bullet.radius <= wave.radius) {
+          bullet.blocked = true;
+          emit(bullet.x, bullet.y, '#79dfff', 5, 95);
+        }
+      }
+    }
+    state.bullets = state.bullets.filter(bullet => !bullet.blocked);
+    state.shockwaves = state.shockwaves.filter(wave => wave.radius < wave.maxRadius && wave.life < wave.maxLife);
+  }
+
+  function drawAirdrop() {
+    const drop = state.airdrop;
+    if (!drop.spawned || drop.opened) return;
+    ctx.save();
+    ctx.translate(drop.x, drop.y);
+    const landed = Math.abs(drop.y - drop.targetY) < 1;
+    ctx.fillStyle = 'rgba(8, 14, 18, .32)'; ctx.beginPath(); ctx.ellipse(0, 34, 36, 10, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#d9e7e5'; ctx.lineWidth = 4;
+    if (!landed) {
+      ctx.beginPath(); ctx.arc(0, -44, 32, Math.PI, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-31, -44); ctx.lineTo(-24, 0); ctx.moveTo(31, -44); ctx.lineTo(24, 0); ctx.stroke();
+    }
+    ctx.fillStyle = '#8d5a43'; ctx.fillRect(-27, -2, 54, 38);
+    ctx.strokeStyle = '#382b2c'; ctx.lineWidth = 4; ctx.strokeRect(-27, -2, 54, 38);
+    ctx.fillStyle = '#f3c862'; ctx.fillRect(-29, 10, 58, 8);
+    ctx.fillStyle = '#52e1d1'; ctx.beginPath(); ctx.arc(0, 8, 6, 0, TAU); ctx.fill();
+    if (landed) {
+      ctx.fillStyle = '#fff0c8'; ctx.font = '900 13px Nunito'; ctx.textAlign = 'center';
+      ctx.fillText('空投', 0, -18);
+      ctx.fillStyle = '#9dfff0'; ctx.font = '900 10px Nunito'; ctx.fillText('靠近后左键开启', 0, 54);
+    }
+    ctx.restore();
+  }
+
+  function drawShockwave(wave) {
+    const progress = wave.radius / wave.maxRadius;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - progress) * .95;
+    ctx.strokeStyle = '#66dfff';
+    ctx.lineWidth = 10 - progress * 5;
+    ctx.shadowColor = '#2fa9ff';
+    ctx.shadowBlur = 18;
+    ctx.beginPath(); ctx.arc(wave.x, wave.y, wave.radius, 0, TAU); ctx.stroke();
+    ctx.globalAlpha *= .42;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(wave.x, wave.y, Math.max(0, wave.radius - 18), 0, TAU); ctx.stroke();
     ctx.restore();
   }
 
@@ -1874,6 +2085,7 @@
     ui.start.hidden = true;
     ui.pause.hidden = true;
     ui.gameOver.hidden = true;
+    ui.artifactScreen.hidden = true;
     ui.tutorialReturnPause.hidden = true;
     ui.tutorialMainMenu.hidden = false;
     document.querySelector('.game-shell').classList.toggle('coop-mode', isTwoPlayer());
@@ -1904,6 +2116,7 @@
     stopMusic();
     ui.pause.hidden = true;
     ui.gameOver.hidden = true;
+    ui.artifactScreen.hidden = true;
     ui.shop.hidden = true;
     showMainMenu();
     ui.start.hidden = false;
@@ -1928,6 +2141,7 @@
     ui.settingsPage.hidden = true;
     updateSkinSelection();
     updateSettingsLabel();
+    updateDifficultySelection();
   }
 
   function selectSkin(skin) {
@@ -1943,6 +2157,20 @@
     ui.toggleShake.textContent = `画面震动：${state.reducedMotion ? '关闭' : '开启'}`;
     ui.toggleMusic.textContent = `背景音乐：${audio.musicEnabled ? '开启' : '关闭'}`;
     ui.toggleSfx.textContent = `游戏音效：${audio.sfxEnabled ? '开启' : '关闭'}`;
+  }
+
+  function updateDifficultySelection() {
+    const difficulty = difficultyConfig();
+    ui.difficultyCurrent.querySelector('b').textContent = difficulty.name;
+    ui.difficultyOptions.forEach(button => button.classList.toggle('selected', button.dataset.difficulty === selectedDifficulty));
+  }
+
+  function selectDifficulty(difficulty) {
+    if (!DIFFICULTIES[difficulty]) return;
+    selectedDifficulty = difficulty;
+    ui.difficultySelect.hidden = true;
+    ui.difficultyCurrent.setAttribute('aria-expanded', 'false');
+    updateDifficultySelection();
   }
 
   function gameLoop(time) {
@@ -1971,8 +2199,9 @@
     const slot = inventory ? inventory.findIndex(item => !item) : -1;
     if (slot < 0) { showToast('物品栏已满'); return; }
     if (!buyer) { showToast('请靠近矿井补给站'); return; }
-    if (state.gems < 12) { showToast('宝石不够，去炸宝石车厢！'); return; }
-    state.gems -= 12;
+    const price = priceFor(buyer, 12);
+    if (state.gems < price) { showToast('宝石不够，去炸宝石车厢！'); return; }
+    state.gems -= price;
     playSfx('buy');
     inventory[slot] = 'cannon';
     showToast('补给完成，点击物品栏中的大炮即可放置');
@@ -1986,8 +2215,9 @@
     if (slot < 0) { showToast('物品栏已满'); return; }
     if (!buyer) { showToast('请靠近矿井补给站'); return; }
     if (buyer.helmet) { showToast('探照灯头盔已经佩戴'); return; }
-    if (state.gems < 18) { showToast('宝石不够，先去收集更多宝石！'); return; }
-    state.gems -= 18;
+    const price = priceFor(buyer, 18);
+    if (state.gems < price) { showToast('宝石不够，先去收集更多宝石！'); return; }
+    state.gems -= price;
     playSfx('buy');
     inventory[slot] = 'helmet';
     buyer.helmet = true;
@@ -2017,8 +2247,9 @@
     const slot = inventory ? inventory.findIndex(item => !item) : -1;
     if (slot < 0) { showToast('物品栏已满'); return; }
     if (!buyer) { showToast('请靠近矿井补给站'); return; }
-    if (state.gems < cost) { showToast('宝石不够，去炸宝石车厢！'); return; }
-    state.gems -= cost;
+    const price = priceFor(buyer, cost);
+    if (state.gems < price) { showToast('宝石不够，去炸宝石车厢！'); return; }
+    state.gems -= price;
     playSfx('buy');
     inventory[slot] = type;
     showToast(message);
@@ -2060,6 +2291,31 @@
     } else if (item === 'helmet') {
       showToast('探照灯头盔已经佩戴');
       return;
+    } else if (item === 'necklace') {
+      showToast('魔法项链已佩戴，会在致命伤时自动触发');
+      return;
+    } else if (item === 'member') {
+      showToast('会员卡生效中，商店价格已打七折');
+      return;
+    } else if (item === 'phoenix') {
+      showToast('不死鸟之眼生效中，大炮摧毁车厢可恢复生命');
+      return;
+    } else if (item === 'grail') {
+      showToast('圣杯生效中，每 2 秒恢复 1 点生命');
+      return;
+    } else if (item === 'barrel') {
+      showToast('火药桶生效中，大炮冷却缩短至 2 秒');
+      return;
+    } else if (item === 'battery') {
+      if (!state.gemMine.repaired) { showToast('先修复宝石矿井才能使用电池'); return; }
+      if (distance(player, state.gemMine) > 170) { showToast('请靠近宝石矿井后使用电池'); return; }
+      if (state.gemMine.upgraded) { showToast('宝石矿井已经升级'); return; }
+      state.gemMine.upgraded = true;
+      state.gemMine.productionTimer = Math.min(state.gemMine.productionTimer, 1.5);
+      inventory[index] = null;
+      emit(state.gemMine.x, state.gemMine.y, '#f6d77b', 24, 140);
+      playSfx('repair');
+      showToast('矿井电池已安装！每 1.5 秒产出一个宝石');
     }
     syncUI();
   }
@@ -2084,10 +2340,18 @@
   }
 
   window.addEventListener('keydown', event => {
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyE', 'KeyM', 'KeyQ', 'KeyN', 'KeyP', 'KeyO', 'Escape'].includes(event.code)) event.preventDefault();
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyE', 'KeyM', 'KeyQ', 'KeyN', 'KeyP', 'KeyO', 'KeyI', 'Space', 'Escape'].includes(event.code)) event.preventDefault();
     keys.add(event.code);
+    if (!started && event.code === 'Space' && !event.repeat && !ui.mainMenu.hidden && ui.supportModal.hidden) {
+      startGame();
+      return;
+    }
     if (!started || gameOver) return;
     if (event.code === 'Escape' && !event.repeat) {
+      if (!ui.artifactScreen.hidden) {
+        closeArtifactChoice();
+        return;
+      }
       if (!ui.tutorialPage.hidden && !ui.tutorialReturnPause.hidden) {
         ui.tutorialReturnPause.hidden = true;
         ui.tutorialPage.hidden = true;
@@ -2130,6 +2394,15 @@
         summonTestWeather();
       }
     }
+    if (event.code === 'KeyI' && !event.repeat) {
+      const now = performance.now();
+      testAirdropPresses = testAirdropPresses.filter(timestamp => now - timestamp <= 3000);
+      testAirdropPresses.push(now);
+      if (testAirdropPresses.length >= 5) {
+        testAirdropPresses = [];
+        summonTestAirdrop();
+      }
+    }
   });
   window.addEventListener('keyup', event => keys.delete(event.code));
   canvas.addEventListener('mousemove', event => { const box = canvas.getBoundingClientRect(); mouse.x = event.clientX - box.left; mouse.y = event.clientY - box.top; });
@@ -2137,8 +2410,14 @@
     if (event.button !== 0) return;
     mouse.down = true;
     if (started && !paused && !gameOver) {
-      if (state.player.downed) return;
       const target = screenToWorld(mouse.x, mouse.y);
+      const drop = state.airdrop;
+      const opener = getActivePlayers().find(player => distance(player, drop) < 105);
+      if (drop.spawned && !drop.opened && drop.y >= drop.targetY && opener && distance(target, drop) < 68) {
+        openAirdrop(opener);
+        return;
+      }
+      if (state.player.downed) return;
       if (!state.player.cannon && !state.gemMine.repaired && distance(target, state.gemMine) < 120) {
         repairGemMine();
         return;
@@ -2188,6 +2467,12 @@
   ui.menuSkins.addEventListener('click', () => showMenuPage('skins'));
   ui.menuTutorial.addEventListener('click', () => showMenuPage('tutorial'));
   ui.menuSettings.addEventListener('click', () => showMenuPage('settings'));
+  ui.difficultyCurrent.addEventListener('click', () => {
+    const isOpen = !ui.difficultySelect.hidden;
+    ui.difficultySelect.hidden = isOpen;
+    ui.difficultyCurrent.setAttribute('aria-expanded', String(!isOpen));
+  });
+  ui.difficultyOptions.forEach(button => button.addEventListener('click', () => selectDifficulty(button.dataset.difficulty)));
   ui.supportCreator.addEventListener('click', () => { ui.supportModal.hidden = false; });
   ui.supportClose.addEventListener('click', () => { ui.supportModal.hidden = true; });
   ui.supportModal.addEventListener('click', event => { if (event.target === ui.supportModal) ui.supportModal.hidden = true; });

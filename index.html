@@ -22,9 +22,12 @@
             <h1>宝石矿井</h1>
           </div>
         </div>
-        <div class="gem-counter" aria-live="polite">
-          <span class="gem-icon" aria-hidden="true"></span>
-          <span id="gem-count">0</span>
+        <div class="hud-right">
+          <div id="game-difficulty" class="game-difficulty" aria-live="polite">正常模式</div>
+          <div class="gem-counter" aria-live="polite">
+            <span class="gem-icon" aria-hidden="true"></span>
+            <span id="gem-count">0</span>
+          </div>
         </div>
       </header>
 
@@ -84,32 +87,32 @@
         <button id="buy-cannon" type="button">
           <span class="shop-cannon" aria-hidden="true"></span>
           <span class="buy-copy"><b>补充大炮</b><small>购买后点击物品栏放置</small></span>
-          <span class="price"><i class="gem-icon"></i>12</span>
+          <span class="price" data-price="12"><i class="gem-icon"></i>12</span>
         </button>
         <button id="buy-helmet" type="button">
           <span class="shop-helmet" aria-hidden="true"></span>
           <span class="buy-copy"><b>探照灯头盔</b><small>购买后自动佩戴，减伤</small></span>
-          <span class="price"><i class="gem-icon"></i>18</span>
+          <span class="price" data-price="18"><i class="gem-icon"></i>18</span>
         </button>
         <button id="buy-fish" type="button">
           <span class="shop-fish" aria-hidden="true"></span>
           <span class="buy-copy"><b>鱼罐头</b><small>点击物品栏食用，恢复 20 生命</small></span>
-          <span class="price"><i class="gem-icon"></i>6</span>
+          <span class="price" data-price="6"><i class="gem-icon"></i>6</span>
         </button>
         <button id="buy-wall" type="button">
           <span class="shop-wall" aria-hidden="true"></span>
           <span class="buy-copy"><b>防护墙体</b><small>点击物品栏部署，可挡 5 发子弹</small></span>
-          <span class="price"><i class="gem-icon"></i>8</span>
+          <span class="price" data-price="8"><i class="gem-icon"></i>8</span>
         </button>
         <button id="buy-cake" type="button">
           <span class="shop-cake" aria-hidden="true"></span>
           <span class="buy-copy"><b>蛋糕</b><small>点击物品栏食用，移速翻倍 10 秒</small></span>
-          <span class="price"><i class="gem-icon"></i>9</span>
+          <span class="price" data-price="9"><i class="gem-icon"></i>9</span>
         </button>
         <button id="buy-umbrella" type="button">
           <span class="shop-umbrella" aria-hidden="true"></span>
           <span class="buy-copy"><b>保护伞</b><small>放置后可阻挡 3 次落石</small></span>
-          <span class="price"><i class="gem-icon"></i>14</span>
+          <span class="price" data-price="14"><i class="gem-icon"></i>14</span>
         </button>
       </section>
 
@@ -153,6 +156,18 @@
             <button id="menu-settings" class="menu-button" type="button">设置</button>
           </div>
           <small class="menu-footnote">WASD 移动 · E 操控炮台 · ESC 暂停</small>
+          <aside class="difficulty-panel" aria-label="难度选择">
+            <p class="difficulty-title">难度选择</p>
+            <button id="difficulty-current" class="difficulty-current" type="button" aria-expanded="false">
+              <span>当前难度</span><b>正常模式</b>
+            </button>
+            <div id="difficulty-select" class="difficulty-select" hidden>
+              <button class="difficulty-option" data-difficulty="easy" type="button">简单模式</button>
+              <button class="difficulty-option selected" data-difficulty="normal" type="button">正常模式</button>
+              <button class="difficulty-option" data-difficulty="hard" type="button">困难模式</button>
+              <button class="difficulty-option" data-difficulty="hell" type="button">地狱模式</button>
+            </div>
+          </aside>
         </div>
 
         <div id="support-modal" class="support-modal" hidden role="dialog" aria-modal="true" aria-labelledby="support-title">
@@ -262,6 +277,15 @@
             <button id="restart" class="menu-button primary" type="button">重新开始</button>
             <button id="game-over-menu" class="menu-button" type="button">返回主菜单</button>
           </div>
+        </div>
+      </section>
+
+      <section id="artifact-screen" class="artifact-screen" hidden>
+        <div class="artifact-card">
+          <p class="eyebrow">SUPPLY DROP OPENED</p>
+          <h2>选择一件神器</h2>
+          <p>空投已打开，选择的神器将放入你的物品栏。</p>
+          <div id="artifact-options" class="artifact-options"></div>
         </div>
       </section>
     </main>
