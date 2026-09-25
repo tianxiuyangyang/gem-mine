@@ -995,14 +995,18 @@
   function dismantleCannonAt(target) {
     const cannon = state.cannons.find(item => !item.destroyed && !item.removing && distance(item, target) < 58);
     if (!cannon) return false;
-    const owner = getActivePlayers().reduce((nearest, player) => !nearest || distance(player, cannon) < distance(nearest, cannon) ? player : nearest, null) || state.player;
+    const owner = getActivePlayers().reduce((nearest, player) => !nearest || distance(player, cannon) < distance(nearest, cannon) ? player : nearest, null);
+    if (!owner || distance(owner, cannon) >= 57) {
+      showToast('请靠近大炮后再拆卸');
+      return true;
+    }
     for (const player of getPlayers()) if (player.cannon === cannon) player.cannon = null;
-    cannon.dismantleHits = Math.min(3, cannon.dismantleHits + 1);
+    cannon.dismantleHits = Math.min(6, cannon.dismantleHits + 1);
     cannon.hammerTimer = .28;
     cannon.hitFlash = .18;
     emit(cannon.x, cannon.y - 8, '#e7d49a', 7, 75);
     playSfx('hammer');
-    if (cannon.dismantleHits >= 3) {
+    if (cannon.dismantleHits >= 6) {
       const inventory = inventoryFor(owner);
       cannon.collectOwner = owner;
       cannon.collectSlot = inventory.findIndex(item => !item);
@@ -1010,7 +1014,7 @@
       cannon.removeTimer = .48;
       showToast(cannon.collectSlot >= 0 ? '大炮拆卸完成，正在收入背包' : '大炮拆卸完成，但背包已满');
     } else {
-      showToast(`拆卸大炮：${cannon.dismantleHits}/3`);
+      showToast(`拆卸大炮：${cannon.dismantleHits}/6`);
     }
     return true;
   }
@@ -1843,7 +1847,7 @@
   function drawCannon(c) {
     ctx.save();
     ctx.translate(c.x, c.y);
-    const removeProgress = c.dismantleHits / 3;
+    const removeProgress = c.dismantleHits / 6;
     const removeScale = c.removing ? clamp(c.removeTimer / .48, 0, 1) : 1;
     ctx.globalAlpha = c.removing ? removeScale : 1;
     ctx.scale(removeScale, removeScale);
@@ -1925,7 +1929,7 @@
       ctx.fillRect(-35, 68, 70 * (c.removing ? 1 : removeProgress), 6);
       ctx.fillStyle = '#fff0c8';
       ctx.font = '900 9px Nunito';
-      ctx.fillText(c.removing ? '收入中' : `拆卸 ${c.dismantleHits}/3`, 0, 87);
+      ctx.fillText(c.removing ? '收入中' : `拆卸 ${c.dismantleHits}/6`, 0, 87);
     }
     ctx.restore();
   }
