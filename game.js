@@ -56,6 +56,7 @@
     toggleShake: document.querySelector('#toggle-shake'),
     toggleMusic: document.querySelector('#toggle-music'),
     toggleSfx: document.querySelector('#toggle-sfx'),
+    toggleSmallScreen: document.querySelector('#toggle-small-screen'),
     gameOver: document.querySelector('#game-over'),
     restart: document.querySelector('#restart'),
     gameOverMenu: document.querySelector('#game-over-menu'),
@@ -80,6 +81,7 @@
   let testAirdropPresses = [];
   let gameMode = 'single';
   let selectedDifficulty = 'normal';
+  let smallScreenMode = false;
   let weatherCanvas = null;
   let weatherCtx = null;
   const audio = { context: null, musicEnabled: true, sfxEnabled: true, musicTimer: 0, musicStep: 0 };
@@ -160,6 +162,7 @@
     canvas.style.width = `${innerWidth}px`;
     canvas.style.height = `${innerHeight}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    document.querySelector('.game-shell').classList.toggle('small-screen-mode', smallScreenMode);
     if (!started) {
       state.player.x = world.w * .42;
       state.player.y = world.h * .54;
@@ -1139,6 +1142,9 @@
     }
     renderInventory(ui.p1InventorySlots, state.inventory, 'P1');
     if (isTwoPlayer()) renderInventory(ui.p2InventorySlots, state.inventory2, 'P2');
+    // Only show the shop controls while an active player is close enough to use them.
+    const nearShop = Boolean(getShopCustomer());
+    ui.shop.hidden = !nearShop;
     positionShop();
     const cannon = getPlayers().find(player => player.cannon)?.cannon;
     const nearest = findNearestCannon();
@@ -1155,7 +1161,6 @@
       ui.hint.classList.toggle('visible', Boolean(nearest || p2Nearest || mineHint || hasCannonItem || hasQuickItem));
     }
     ui.wave.textContent = state.trains.length ? `第 ${state.trains[0].round} 轮火车正在穿过矿井` : `第 ${state.trainRound + 1} 轮列车 ${Math.ceil(Math.max(0, state.trainTimer))} 秒`;
-    const nearShop = Boolean(getShopCustomer());
     const shopPlayer = getShopCustomer() || state.player;
     ui.shopPrices.forEach(price => {
       const basePrice = Number(price.dataset.price);
@@ -2157,6 +2162,7 @@
     ui.toggleShake.textContent = `画面震动：${state.reducedMotion ? '关闭' : '开启'}`;
     ui.toggleMusic.textContent = `背景音乐：${audio.musicEnabled ? '开启' : '关闭'}`;
     ui.toggleSfx.textContent = `游戏音效：${audio.sfxEnabled ? '开启' : '关闭'}`;
+    ui.toggleSmallScreen.textContent = `笔记本-小屏幕模式：${smallScreenMode ? '开启' : '关闭'}`;
   }
 
   function updateDifficultySelection() {
@@ -2405,7 +2411,13 @@
     }
   });
   window.addEventListener('keyup', event => keys.delete(event.code));
-  canvas.addEventListener('mousemove', event => { const box = canvas.getBoundingClientRect(); mouse.x = event.clientX - box.left; mouse.y = event.clientY - box.top; });
+  canvas.addEventListener('mousemove', event => {
+    const box = canvas.getBoundingClientRect();
+    const scaleX = canvas.clientWidth ? canvas.width / dpr / canvas.clientWidth : 1;
+    const scaleY = canvas.clientHeight ? canvas.height / dpr / canvas.clientHeight : 1;
+    mouse.x = (event.clientX - box.left) * scaleX;
+    mouse.y = (event.clientY - box.top) * scaleY;
+  });
   canvas.addEventListener('mousedown', event => {
     if (event.button !== 0) return;
     mouse.down = true;
@@ -2495,6 +2507,12 @@
   ui.toggleSfx.addEventListener('click', () => {
     audio.sfxEnabled = !audio.sfxEnabled;
     if (audio.sfxEnabled) { ensureAudio(); playSfx('buy'); }
+    updateSettingsLabel();
+  });
+  ui.toggleSmallScreen.addEventListener('click', () => {
+    smallScreenMode = !smallScreenMode;
+    document.querySelector('.game-shell').classList.toggle('small-screen-mode', smallScreenMode);
+    resize();
     updateSettingsLabel();
   });
   ui.restart.addEventListener('click', restartGame);

@@ -25,6 +25,26 @@ button { font: inherit; }
 
 .game-shell { position: relative; width: 100%; height: 100%; overflow: hidden; }
 
+/* Scales the complete game presentation for compact laptop displays while keeping world logic unchanged. */
+.game-shell.small-screen-mode > canvas,
+.game-shell.small-screen-mode > .hud,
+.game-shell.small-screen-mode > .health-hud,
+.game-shell.small-screen-mode > .inventory,
+.game-shell.small-screen-mode > .buff-hud,
+.game-shell.small-screen-mode > .status-panel,
+.game-shell.small-screen-mode > .rescue-hud,
+.game-shell.small-screen-mode > .hint,
+.game-shell.small-screen-mode > .shop,
+.game-shell.small-screen-mode > #toast { transform: scale(.82); transform-origin: center center; }
+.game-shell.small-screen-mode > canvas { width: 122%; height: 122%; transform-origin: left top; }
+.game-shell.small-screen-mode > .hud { inset: 0; width: 122%; height: max-content; transform-origin: left top; }
+.game-shell.small-screen-mode > .health-hud { margin-left: -9%; }
+.game-shell.small-screen-mode > .inventory { margin-right: 9%; }
+.game-shell.small-screen-mode > .buff-hud { margin-right: 9%; }
+.game-shell.small-screen-mode > .status-panel { margin-left: 9%; }
+.game-shell.small-screen-mode > .hint { margin-left: 0; }
+.game-shell.small-screen-mode > .shop { transform-origin: left top; }
+
 canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 
 .hud {
@@ -195,6 +215,8 @@ kbd, .mouse-key { display: inline-grid; min-width: 23px; height: 23px; padding: 
 .difficulty-current b { color: #ffe58d; font-size: 13px; }
 .difficulty-select { display: grid; gap: 7px; margin-top: 10px; }
 .difficulty-option { min-height: 34px; padding: 6px 9px; text-align: left; }
+.small-screen-toggle { width: 100%; min-height: 38px; margin-top: 11px; padding: 7px 8px; border: 2px solid #527b7e; border-radius: 5px; background: #263d46; color: #e9f1dd; font-size: 11px; font-weight: 900; text-align: left; cursor: pointer; }
+.small-screen-toggle:hover { filter: brightness(1.12); }
 .difficulty-current:hover, .difficulty-option:hover { filter: brightness(1.12); }
 .difficulty-option.selected { border-color: #e3b54c; background: #4d4935; color: #fff0c8; }
 .support-creator { position: absolute; z-index: 2; top: 12px; right: 12px; display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 2px solid #e78d8d; border-radius: 50%; background: #542f3a; color: #ffb0a8; font-size: 18px; cursor: pointer; box-shadow: 0 3px 0 #271c27; transition: transform .12s, filter .12s; }
