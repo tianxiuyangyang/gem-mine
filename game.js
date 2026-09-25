@@ -1272,7 +1272,7 @@
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.save();
     if (smallScreenMode) {
-      const mapScale = .5;
+      const mapScale = .25;
       ctx.translate(innerWidth * (1 - mapScale) / 2, innerHeight * (1 - mapScale) / 2);
       ctx.scale(mapScale, mapScale);
     }
@@ -2420,7 +2420,7 @@
     const box = canvas.getBoundingClientRect();
     const scaleX = canvas.clientWidth ? canvas.width / dpr / canvas.clientWidth : 1;
     const scaleY = canvas.clientHeight ? canvas.height / dpr / canvas.clientHeight : 1;
-    const viewScale = smallScreenMode ? .5 : 1;
+    const viewScale = smallScreenMode ? .25 : 1;
     mouse.x = ((event.clientX - box.left) * scaleX - innerWidth * (1 - viewScale) / 2) / viewScale;
     mouse.y = ((event.clientY - box.top) * scaleY - innerHeight * (1 - viewScale) / 2) / viewScale;
   });
