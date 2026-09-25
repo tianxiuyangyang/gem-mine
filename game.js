@@ -417,7 +417,8 @@
     emit(pos.x, pos.y, car.type === 'gem' ? '#48e0cf' : '#a3a3a2', 28, 210);
     if (car.type === 'gem') {
       const normalCount = 5 + Math.floor(Math.random() * 4);
-      const count = Math.max(1, Math.round(normalCount * difficultyConfig().gemDropMultiplier));
+      const bonusCount = 2 + Math.floor(Math.random() * 2);
+      const count = Math.max(1, Math.round(normalCount * difficultyConfig().gemDropMultiplier) + bonusCount);
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * TAU;
         state.gemsOnGround.push({ x: pos.x, y: pos.y, vx: Math.cos(angle) * rand(55, 160), vy: Math.sin(angle) * rand(55, 160), radius: 9, spin: Math.random() * TAU, age: 0, picked: false });
