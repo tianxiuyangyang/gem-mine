@@ -234,12 +234,15 @@
     const cameraPlayers = livingPlayers.length ? livingPlayers : getPlayers();
     const focusX = cameraPlayers.reduce((sum, p) => sum + p.x, 0) / cameraPlayers.length;
     const focusY = cameraPlayers.reduce((sum, p) => sum + p.y, 0) / cameraPlayers.length;
-    const targetX = focusX - innerWidth / 2;
-    const targetY = focusY - innerHeight / 2;
+    const viewScale = smallScreenMode ? SMALL_SCREEN_MAP_SCALE : 1;
+    const viewWidth = innerWidth / viewScale;
+    const viewHeight = innerHeight / viewScale;
+    const targetX = focusX - viewWidth / 2;
+    const targetY = focusY - viewHeight / 2;
     world.cameraX += (targetX - world.cameraX) * .12;
     world.cameraY += (targetY - world.cameraY) * .12;
-    world.cameraX = clamp(world.cameraX, 0, Math.max(0, world.w - innerWidth));
-    world.cameraY = clamp(world.cameraY, 0, Math.max(0, world.h - innerHeight));
+    world.cameraX = clamp(world.cameraX, 0, Math.max(0, world.w - viewWidth));
+    world.cameraY = clamp(world.cameraY, 0, Math.max(0, world.h - viewHeight));
   }
 
   function screenToWorld(x, y) {
@@ -1271,6 +1274,9 @@
 
   function draw() {
     ctx.clearRect(0, 0, innerWidth, innerHeight);
+    // Keep the screen filled when the scaled world reaches a map boundary.
+    ctx.fillStyle = '#253747';
+    ctx.fillRect(0, 0, innerWidth, innerHeight);
     ctx.save();
     if (smallScreenMode) {
       const mapScale = SMALL_SCREEN_MAP_SCALE;
