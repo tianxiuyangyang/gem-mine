@@ -1271,6 +1271,11 @@
   function draw() {
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.save();
+    if (smallScreenMode) {
+      const mapScale = .5;
+      ctx.translate(innerWidth * (1 - mapScale) / 2, innerHeight * (1 - mapScale) / 2);
+      ctx.scale(mapScale, mapScale);
+    }
     const shakeX = state.screenShake ? rand(-state.screenShake, state.screenShake) : 0;
     const shakeY = state.screenShake ? rand(-state.screenShake, state.screenShake) : 0;
     ctx.translate(-world.cameraX + shakeX, -world.cameraY + shakeY);
@@ -2415,8 +2420,9 @@
     const box = canvas.getBoundingClientRect();
     const scaleX = canvas.clientWidth ? canvas.width / dpr / canvas.clientWidth : 1;
     const scaleY = canvas.clientHeight ? canvas.height / dpr / canvas.clientHeight : 1;
-    mouse.x = (event.clientX - box.left) * scaleX;
-    mouse.y = (event.clientY - box.top) * scaleY;
+    const viewScale = smallScreenMode ? .5 : 1;
+    mouse.x = ((event.clientX - box.left) * scaleX - innerWidth * (1 - viewScale) / 2) / viewScale;
+    mouse.y = ((event.clientY - box.top) * scaleY - innerHeight * (1 - viewScale) / 2) / viewScale;
   });
   canvas.addEventListener('mousedown', event => {
     if (event.button !== 0) return;
