@@ -245,6 +245,17 @@
     world.cameraY = clamp(world.cameraY, 0, Math.max(0, world.h - viewHeight));
   }
 
+  function snapCameraToPlayers() {
+    const players = getActivePlayers().length ? getActivePlayers() : getPlayers();
+    const focusX = players.reduce((sum, p) => sum + p.x, 0) / players.length;
+    const focusY = players.reduce((sum, p) => sum + p.y, 0) / players.length;
+    const viewScale = smallScreenMode ? SMALL_SCREEN_MAP_SCALE : 1;
+    const viewWidth = innerWidth / viewScale;
+    const viewHeight = innerHeight / viewScale;
+    world.cameraX = clamp(focusX - viewWidth / 2, 0, Math.max(0, world.w - viewWidth));
+    world.cameraY = clamp(focusY - viewHeight / 2, 0, Math.max(0, world.h - viewHeight));
+  }
+
   function screenToWorld(x, y) {
     return { x: x + world.cameraX, y: y + world.cameraY };
   }
@@ -1207,18 +1218,24 @@
   }
 
   function positionShop() {
-    const panelW = ui.shop.offsetWidth || 255;
-    const panelH = ui.shop.offsetHeight || 110;
+    const uiScale = smallScreenMode ? .82 : 1;
+    const panelW = (ui.shop.offsetWidth || 255) * uiScale;
+    const panelH = (ui.shop.offsetHeight || 110) * uiScale;
     const cameraX = world.cameraX;
     const cameraY = world.cameraY;
+    const viewScale = smallScreenMode ? SMALL_SCREEN_MAP_SCALE : 1;
+    const viewOffsetX = innerWidth * (1 - viewScale) / 2;
+    const viewOffsetY = innerHeight * (1 - viewScale) / 2;
+    const toScreenX = worldX => viewOffsetX + (worldX - cameraX) * viewScale;
+    const toScreenY = worldY => viewOffsetY + (worldY - cameraY) * viewScale;
     const candidates = [
-      { left: shopZone.x + shopZone.w / 2 - panelW / 2 - cameraX, top: shopZone.y - panelH - 28 - cameraY },
-      { left: shopZone.x + shopZone.w + 24 - cameraX, top: shopZone.y + shopZone.h / 2 - panelH / 2 - cameraY },
-      { left: shopZone.x - panelW - 24 - cameraX, top: shopZone.y + shopZone.h / 2 - panelH / 2 - cameraY },
-      { left: shopZone.x + shopZone.w / 2 - panelW / 2 - cameraX, top: shopZone.y + shopZone.h + 24 - cameraY },
+      { left: toScreenX(shopZone.x + shopZone.w / 2) - panelW / 2, top: toScreenY(shopZone.y) - panelH - 28 * viewScale },
+      { left: toScreenX(shopZone.x + shopZone.w) + 24 * viewScale, top: toScreenY(shopZone.y + shopZone.h / 2) - panelH / 2 },
+      { left: toScreenX(shopZone.x) - panelW - 24 * viewScale, top: toScreenY(shopZone.y + shopZone.h / 2) - panelH / 2 },
+      { left: toScreenX(shopZone.x + shopZone.w / 2) - panelW / 2, top: toScreenY(shopZone.y + shopZone.h) + 24 * viewScale },
     ];
-    const playerRadius = state.player.radius + 28;
-    const playerScreen = { x: state.player.x - cameraX, y: state.player.y - cameraY };
+    const playerRadius = (state.player.radius + 28) * viewScale;
+    const playerScreen = { x: toScreenX(state.player.x), y: toScreenY(state.player.y) };
     const overlapsPlayer = position => (
       playerScreen.x + playerRadius > position.left &&
       playerScreen.x - playerRadius < position.left + panelW &&
@@ -2525,6 +2542,7 @@
   ui.toggleSmallScreen.addEventListener('click', () => {
     smallScreenMode = !smallScreenMode;
     document.querySelector('.game-shell').classList.toggle('small-screen-mode', smallScreenMode);
+    snapCameraToPlayers();
     resize();
     updateSettingsLabel();
   });

@@ -36,12 +36,14 @@ button { font: inherit; }
 .game-shell.small-screen-mode > .shop,
 .game-shell.small-screen-mode > #toast { transform: scale(.82); transform-origin: center center; }
 .game-shell.small-screen-mode > canvas { width: 100%; height: 100%; transform: none; }
-.game-shell.small-screen-mode > .hud { inset: 0; width: 122%; height: max-content; transform-origin: left top; }
-.game-shell.small-screen-mode > .health-hud { margin-left: -9%; }
-.game-shell.small-screen-mode > .inventory { margin-right: 9%; }
-.game-shell.small-screen-mode > .buff-hud { margin-right: 9%; }
-.game-shell.small-screen-mode > .status-panel { margin-left: 9%; }
-.game-shell.small-screen-mode > .hint { margin-left: 0; }
+.game-shell.small-screen-mode > .hud { transform-origin: center top; }
+.game-shell.small-screen-mode > .health-hud { transform: translateX(-50%) scale(.82); transform-origin: center top; }
+.game-shell.small-screen-mode > .inventory,
+.game-shell.small-screen-mode > .buff-hud { transform-origin: top right; }
+.game-shell.small-screen-mode > .status-panel { transform-origin: top left; }
+.game-shell.small-screen-mode > .rescue-hud { transform: translateX(-50%) scale(.82); transform-origin: center top; }
+.game-shell.small-screen-mode > .hint { transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
+.game-shell.small-screen-mode > #toast { transform: translate(-50%, -50%) translateY(8px) scale(.82); transform-origin: center center; }
 .game-shell.small-screen-mode > .shop { transform-origin: left top; }
 
 canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
