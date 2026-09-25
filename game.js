@@ -126,6 +126,8 @@
 
   const MAP_SCALE = 1.5;
   const SMALL_SCREEN_MAP_SCALE = 5 / 7;
+  const SMALL_SCREEN_MAP_OFFSET_X = -24;
+  const SMALL_SCREEN_MAP_OFFSET_Y = -24;
   const TRAIN_BASE_SPEED = 58;
   const MONSTER_AMMO_SPEED_FACTOR = 2 / 3;
   const SHOTGUN_BULLET_SPEED = 93 * MONSTER_AMMO_SPEED_FACTOR * 1.8;
@@ -1224,8 +1226,8 @@
     const cameraX = world.cameraX;
     const cameraY = world.cameraY;
     const viewScale = smallScreenMode ? SMALL_SCREEN_MAP_SCALE : 1;
-    const viewOffsetX = innerWidth * (1 - viewScale) / 2;
-    const viewOffsetY = innerHeight * (1 - viewScale) / 2;
+    const viewOffsetX = smallScreenMode ? innerWidth * (1 - viewScale) / 2 + SMALL_SCREEN_MAP_OFFSET_X : 0;
+    const viewOffsetY = smallScreenMode ? innerHeight * (1 - viewScale) / 2 + SMALL_SCREEN_MAP_OFFSET_Y : 0;
     const toScreenX = worldX => viewOffsetX + (worldX - cameraX) * viewScale;
     const toScreenY = worldY => viewOffsetY + (worldY - cameraY) * viewScale;
     const candidates = [
@@ -1297,7 +1299,7 @@
     ctx.save();
     if (smallScreenMode) {
       const mapScale = SMALL_SCREEN_MAP_SCALE;
-      ctx.translate(innerWidth * (1 - mapScale) / 2, innerHeight * (1 - mapScale) / 2);
+      ctx.translate(innerWidth * (1 - mapScale) / 2 + SMALL_SCREEN_MAP_OFFSET_X, innerHeight * (1 - mapScale) / 2 + SMALL_SCREEN_MAP_OFFSET_Y);
       ctx.scale(mapScale, mapScale);
     }
     const shakeX = state.screenShake ? rand(-state.screenShake, state.screenShake) : 0;
@@ -2445,8 +2447,10 @@
     const scaleX = canvas.clientWidth ? canvas.width / dpr / canvas.clientWidth : 1;
     const scaleY = canvas.clientHeight ? canvas.height / dpr / canvas.clientHeight : 1;
     const viewScale = smallScreenMode ? SMALL_SCREEN_MAP_SCALE : 1;
-    mouse.x = ((event.clientX - box.left) * scaleX - innerWidth * (1 - viewScale) / 2) / viewScale;
-    mouse.y = ((event.clientY - box.top) * scaleY - innerHeight * (1 - viewScale) / 2) / viewScale;
+    const viewOffsetX = smallScreenMode ? innerWidth * (1 - viewScale) / 2 + SMALL_SCREEN_MAP_OFFSET_X : 0;
+    const viewOffsetY = smallScreenMode ? innerHeight * (1 - viewScale) / 2 + SMALL_SCREEN_MAP_OFFSET_Y : 0;
+    mouse.x = ((event.clientX - box.left) * scaleX - viewOffsetX) / viewScale;
+    mouse.y = ((event.clientY - box.top) * scaleY - viewOffsetY) / viewScale;
   });
   canvas.addEventListener('mousedown', event => {
     if (event.button !== 0) return;
