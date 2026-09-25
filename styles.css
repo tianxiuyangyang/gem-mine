@@ -220,21 +220,6 @@ kbd, .mouse-key { display: inline-grid; min-width: 23px; height: 23px; padding: 
 .small-screen-toggle:hover { filter: brightness(1.12); }
 .difficulty-current:hover, .difficulty-option:hover { filter: brightness(1.12); }
 .difficulty-option.selected { border-color: #e3b54c; background: #4d4935; color: #fff0c8; }
-.support-creator { position: absolute; z-index: 2; top: 12px; right: 12px; display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 2px solid #e78d8d; border-radius: 50%; background: #542f3a; color: #ffb0a8; font-size: 18px; cursor: pointer; box-shadow: 0 3px 0 #271c27; transition: transform .12s, filter .12s; }
-.support-creator:hover { transform: translateY(-2px) scale(1.06); filter: brightness(1.12); }
-.support-creator:active { transform: translateY(2px); }
-.support-modal { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(5, 10, 16, .78); backdrop-filter: blur(5px); }
-.support-card { position: relative; display: grid; justify-items: center; width: min(390px, 100%); max-height: min(720px, 94vh); overflow: auto; padding: 28px 24px 20px; border: 3px solid #71c9bd; border-radius: 8px; background: #172531; box-shadow: 0 12px 0 rgba(4, 7, 11, .55), inset 0 0 0 3px #23404b; }
-.support-card h3 { margin: 0 0 16px; color: #fff0c8; font-family: "ZCOOL KuaiLe", cursive; font-size: 28px; }
-.support-card img { display: block; width: min(320px, 100%); height: auto; border-radius: 4px; }
-.support-card p { margin: 12px 0 0; color: #b9d4ce; font-size: 12px; font-weight: 800; }
-.contact-creator { display: inline-block; margin-top: 14px; padding: 9px 22px; border: 2px solid #71c9bd; border-radius: 5px; background: #263d46; color: #e9f1dd; font-size: 13px; font-weight: 900; text-decoration: none; box-shadow: inset 0 2px rgba(180, 241, 218, .1), 0 3px 0 #142329; transition: transform .12s, filter .12s; }
-.contact-creator:hover { transform: translateY(-2px); filter: brightness(1.1); }
-.contact-creator:active { transform: translateY(2px); }
-.creator-url { max-width: 100%; margin-top: 8px; color: #83d5c8; font-size: 27.5px; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; text-align: center; }
-.creator-url:hover { color: #c1fff0; }
-.support-close { position: absolute; top: 8px; right: 10px; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: #d7eee6; font-size: 27px; line-height: 1; cursor: pointer; }
-.support-close:hover { color: #fff0c8; }
 .main-menu h2, .menu-page h3, .game-over-card h2 { margin: 0; color: #fff0c8; font-family: "ZCOOL KuaiLe", cursive; font-size: 42px; line-height: 1.1; letter-spacing: 1px; }
 .main-menu h2 { font-size: 52px; }
 .menu-tagline { margin: 9px 0 18px; color: #cbd9ce; font-size: 14px; font-weight: 800; }

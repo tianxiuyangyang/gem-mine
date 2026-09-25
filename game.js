@@ -45,9 +45,6 @@
     menuSkins: document.querySelector('#menu-skins'),
     menuTutorial: document.querySelector('#menu-tutorial'),
     menuSettings: document.querySelector('#menu-settings'),
-    supportCreator: document.querySelector('#support-creator'),
-    supportModal: document.querySelector('#support-modal'),
-    supportClose: document.querySelector('#support-close'),
     skinPage: document.querySelector('#skins-page'),
     tutorialPage: document.querySelector('#tutorial-page'),
     settingsPage: document.querySelector('#settings-page'),
@@ -220,7 +217,7 @@
   }
 
   function placeCannon(x, y) {
-    state.cannons.push({ x, y, radius: 25, angle: -Math.PI / 4, cooldown: 0, flash: 0 });
+    state.cannons.push({ x, y, radius: 25, angle: -Math.PI / 4, cooldown: 0, flash: 0, dismantleHits: 0, hammerTimer: 0, hitFlash: 0, removing: false, removeTimer: 0, collectOwner: null, collectSlot: -1 });
   }
 
   function placeWall(x, y) {
@@ -521,14 +518,22 @@
 
   function updateCannon(dt) {
     for (const cannon of state.cannons) {
+      if (cannon.removing) {
+        cannon.removeTimer -= dt;
+        if (cannon.removeTimer <= 0) finishCannonDismantle(cannon);
+        continue;
+      }
       cannon.cooldown = Math.max(0, cannon.cooldown - dt);
       cannon.flash = Math.max(0, cannon.flash - dt);
+      cannon.hammerTimer = Math.max(0, cannon.hammerTimer - dt);
+      cannon.hitFlash = Math.max(0, cannon.hitFlash - dt);
       const controller = getPlayers().find(player => player.cannon === cannon);
       if (controller) {
         const target = screenToWorld(mouse.x, mouse.y);
         cannon.angle = Math.atan2(target.y - cannon.y, target.x - cannon.x);
       }
     }
+    state.cannons = state.cannons.filter(cannon => !cannon.destroyed);
   }
 
   function updateEarthquake(dt) {
@@ -709,6 +714,7 @@
       rock: () => tone(62, .25, { type: 'triangle', volume: .055, slide: 34 }),
       repair: () => { tone(392, .15, { type: 'sine', volume: .04, slide: 523 }); tone(523, .25, { type: 'sine', volume: .035, slide: 784 }); },
       buy: () => { tone(440, .09, { type: 'triangle', volume: .03 }); tone(660, .13, { type: 'triangle', volume: .025 }); },
+      hammer: () => { tone(170, .08, { type: 'square', volume: .04, slide: 95 }); tone(72, .1, { type: 'triangle', volume: .035, slide: 45 }); },
       heal: () => tone(560, .2, { type: 'sine', volume: .035, slide: 840 }),
     };
     sounds[name]?.();
@@ -979,10 +985,46 @@
   }
 
   function destroyCannon(cannon) {
+    if (cannon.removing) return;
     cannon.destroyed = true;
     for (const player of getPlayers()) if (player.cannon === cannon) player.cannon = null;
     emit(cannon.x, cannon.y, '#8ca7aa', 22, 180);
     showToast('大炮被落石砸毁');
+  }
+
+  function dismantleCannonAt(target) {
+    const cannon = state.cannons.find(item => !item.destroyed && !item.removing && distance(item, target) < 58);
+    if (!cannon) return false;
+    const owner = getActivePlayers().reduce((nearest, player) => !nearest || distance(player, cannon) < distance(nearest, cannon) ? player : nearest, null) || state.player;
+    for (const player of getPlayers()) if (player.cannon === cannon) player.cannon = null;
+    cannon.dismantleHits = Math.min(3, cannon.dismantleHits + 1);
+    cannon.hammerTimer = .28;
+    cannon.hitFlash = .18;
+    emit(cannon.x, cannon.y - 8, '#e7d49a', 7, 75);
+    playSfx('hammer');
+    if (cannon.dismantleHits >= 3) {
+      const inventory = inventoryFor(owner);
+      cannon.collectOwner = owner;
+      cannon.collectSlot = inventory.findIndex(item => !item);
+      cannon.removing = true;
+      cannon.removeTimer = .48;
+      showToast(cannon.collectSlot >= 0 ? '大炮拆卸完成，正在收入背包' : '大炮拆卸完成，但背包已满');
+    } else {
+      showToast(`拆卸大炮：${cannon.dismantleHits}/3`);
+    }
+    return true;
+  }
+
+  function finishCannonDismantle(cannon) {
+    cannon.destroyed = true;
+    if (cannon.collectOwner && cannon.collectSlot >= 0) {
+      inventoryFor(cannon.collectOwner)[cannon.collectSlot] = 'cannon';
+      emit(cannon.x, cannon.y, '#53e1d1', 20, 170);
+      showToast('大炮已收入物品栏');
+    } else {
+      emit(cannon.x, cannon.y, '#8ca7aa', 18, 150);
+    }
+    syncUI();
   }
 
   function damageWall(wall) {
@@ -1801,6 +1843,14 @@
   function drawCannon(c) {
     ctx.save();
     ctx.translate(c.x, c.y);
+    const removeProgress = c.dismantleHits / 3;
+    const removeScale = c.removing ? clamp(c.removeTimer / .48, 0, 1) : 1;
+    ctx.globalAlpha = c.removing ? removeScale : 1;
+    ctx.scale(removeScale, removeScale);
+    if (c.hitFlash) {
+      ctx.fillStyle = 'rgba(255, 231, 151, .42)';
+      ctx.beginPath(); ctx.arc(0, 0, 32, 0, TAU); ctx.fill();
+    }
     const active = getPlayers().some(player => player.cannon === c);
     if (active) {
       ctx.strokeStyle = 'rgba(91, 248, 218, .7)';
@@ -1842,6 +1892,20 @@
       ctx.arc(50, 0, 12 + c.flash * 42, 0, TAU);
       ctx.fill();
     }
+    if (c.hammerTimer > 0) {
+      const hammerProgress = 1 - c.hammerTimer / .28;
+      ctx.save();
+      ctx.translate(-31, -31);
+      ctx.rotate(-.9 + hammerProgress * 1.8);
+      ctx.fillStyle = '#8a5a3d';
+      ctx.fillRect(-3, 0, 6, 30);
+      ctx.fillStyle = '#d8b27b';
+      ctx.fillRect(-13, -7, 26, 10);
+      ctx.strokeStyle = '#4a342c';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(-13, -7, 26, 10);
+      ctx.restore();
+    }
     ctx.restore();
     ctx.save();
     ctx.translate(c.x, c.y);
@@ -1854,6 +1918,15 @@
     ctx.font = '900 9px Nunito';
     ctx.textAlign = 'center';
     ctx.fillText(c.cooldown > 0 ? `${c.cooldown.toFixed(1)}s` : '就绪', 0, 58);
+    if (c.dismantleHits > 0 || c.removing) {
+      ctx.fillStyle = 'rgba(20, 26, 30, .94)';
+      ctx.fillRect(-36, 67, 72, 8);
+      ctx.fillStyle = c.removing ? '#53e1d1' : '#f1bd62';
+      ctx.fillRect(-35, 68, 70 * (c.removing ? 1 : removeProgress), 6);
+      ctx.fillStyle = '#fff0c8';
+      ctx.font = '900 9px Nunito';
+      ctx.fillText(c.removing ? '收入中' : `拆卸 ${c.dismantleHits}/3`, 0, 87);
+    }
     ctx.restore();
   }
 
@@ -2379,7 +2452,7 @@
   window.addEventListener('keydown', event => {
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyE', 'KeyM', 'KeyQ', 'KeyN', 'KeyP', 'KeyO', 'KeyI', 'Space', 'Escape'].includes(event.code)) event.preventDefault();
     keys.add(event.code);
-    if (!started && event.code === 'Space' && !event.repeat && !ui.mainMenu.hidden && ui.supportModal.hidden) {
+    if (!started && event.code === 'Space' && !event.repeat && !ui.mainMenu.hidden) {
       startGame();
       return;
     }
@@ -2464,6 +2537,10 @@
         return;
       }
       if (state.player.downed) return;
+      if (dismantleCannonAt(target)) {
+        mouse.down = false;
+        return;
+      }
       if (!state.player.cannon && !state.gemMine.repaired && distance(target, state.gemMine) < 120) {
         repairGemMine();
         return;
@@ -2519,11 +2596,7 @@
     ui.difficultyCurrent.setAttribute('aria-expanded', String(!isOpen));
   });
   ui.difficultyOptions.forEach(button => button.addEventListener('click', () => selectDifficulty(button.dataset.difficulty)));
-  ui.supportCreator.addEventListener('click', () => { ui.supportModal.hidden = false; });
-  ui.supportClose.addEventListener('click', () => { ui.supportModal.hidden = true; });
-  ui.supportModal.addEventListener('click', event => { if (event.target === ui.supportModal) ui.supportModal.hidden = true; });
   window.addEventListener('keydown', event => {
-    if (event.code === 'Escape' && !ui.supportModal.hidden) ui.supportModal.hidden = true;
   });
   ui.menuBacks.forEach(button => button.addEventListener('click', showMainMenu));
   ui.skinButtons.forEach(button => button.addEventListener('click', () => selectSkin(button.dataset.skin)));
